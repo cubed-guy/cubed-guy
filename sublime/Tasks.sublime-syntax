@@ -1,0 +1,46 @@
+%YAML 1.2
+file_extensions:
+  - tsk
+name: Tasks
+scope: text.tasks
+
+contexts:
+  main:
+    - include: headings
+    - include: done
+    - include: pending
+    - match: .
+
+  headings:
+    - match: ^\s*(#)
+      scope: punctuation.definition.heading.tasks
+      push:
+        - include: hi-line
+        - match: .
+          scope: entity.name.heading.tasks
+  done:
+    - match: (^\s*)(\+)(.*)
+      captures:
+        2: punctuation.definition.comment.done.tasks
+        3: comment.done.tasks
+      push:
+        - meta_scope: comment.done.tasks
+        - match: ^\s*$
+        - match: ^(?!\1\s+)
+          pop: true
+  pending:
+    - match: ^\s*(\-)((.*?)(:|- ))?
+      captures:
+        1: punctuation.definition.pending.tasks
+        3: entity.name.label.tasks
+        4: punctuation.definition.name.tasks
+      push:
+        - include: hi-line
+        - match: .
+          scope: entity.name.tag.pending.tasks
+
+  hi-line:
+    - match: ([!@#%^*()\[\]{},\.<>=+?/:;|\\`~]|-(?=\W)) #$&'" not there
+      scope: punctuation.tasks
+    - match: \n
+      pop: true

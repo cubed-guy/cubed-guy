@@ -1,0 +1,24 @@
+{
+	"shell_cmd": "nasm \"${file}\" -f win32 -o \"${file_base_name}.o\" && gcc \"${file_base_name}.o\" -o \"${file_base_name}.exe\"",
+	"file_regex": "^(..[^:]*):([0-9]+):?([0-9]+)?:? (.*)$",
+	"working_dir": "${file_path}",
+	"selector": "source.nasm",
+
+	"variants":
+	[
+		{
+			"name": "Build & Run",
+			"shell_cmd": "nasm \"${file}\" -f win32 -o \"${file_base_name}.o\" && gcc \"${file_base_name}.o\" -o \"${file_base_name}.exe\" && \"${file_base_name}\""
+		},
+		{
+			"name": "Run",
+			"shell_cmd": "\"${file_base_name}\""
+		}, {
+			"name": "Build 64-bit",
+			"shell_cmd": "nasm \"${file}\" -f win64 -o \"${file_path}\\\\${file_base_name}.o\" && gcc \"${file_path}\\\\${file_base_name}.o\" -no-pie -o \"${file_path}\\\\${file_base_name}.exe\"",
+		},{
+			"name": "Build 64-bit & Run",
+			"shell_cmd": "nasm \"${file}\" -f win64 -o \"${file_path}\\\\${file_base_name}.o\" && gcc \"${file_path}\\\\${file_base_name}.o\" -no-pie -o \"${file_path}\\\\${file_base_name}.exe\" && \"${file_path}\\\\${file_base_name}\""
+		}
+	]
+}

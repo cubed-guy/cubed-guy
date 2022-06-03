@@ -1,0 +1,242 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+name: ahk (user)
+file_extensions: [ahk]
+scope: source.ahk
+
+variables:
+  punctuation: (?x:[!#-&(-/ :-@ \[-` {-~])
+  imports: (?i:includeagain|include)
+  directives: |-
+    \b(?xi:allowsamelinecomments|clipboardtimeout|commentflag|errorstdout|
+      escapechar|hotkeyinterval|hotkeymodifiertimeout|hotstring|inputlevel|
+      iftimeout|if|installkeybdhook|installmousehook|keyhistory|ltrim|
+      menumaskkey|noenv|notrayicon|persistent|singleinstance|usehook|warn|
+      winactivateforce|
+      max(?:hotkeysperinterval|mem|threadsbuffer|threadsperhotkey|threads)|
+      ifwin(?:not)?(?:active|exist)?
+    )\b
+
+  stmt: |-
+    \b(?xi:autotrim|blockinput|click|clipwait|coordmode|
+      detecthiddentext|detecthiddenwindows|driveget|drivespacefree|drive|edit|
+      envadd|envdiv|envget|envmult|envset|envsub|envupdate|formattime|getkeystate|
+      groupactivate|groupadd|groupclose|groupdeactivate|guicontrol|
+      guicontrolget|gui|hotkey|imagesearch|inidelete|iniread|iniwrite|inputbox|
+      input|keyhistory|keywait|listhotkeys|listlines|listvars|menu|
+      mouseclickdrag|mouseclick|mousegetpos|mousemove|msgbox|onexit|outputdebug|
+      pause|pixelgetcolor|pixelsearch|postmessage|process|progress|random|
+      regdelete|regread|regwrite|reload|run|runas|runwait|shutdown|sleep|sort|
+      splashimage|splashtextoff|splashtexton|splitpath|
+      statusbargettext|statusbarwait|suspend|sysget|thread|tooltip|
+      transform|traytip|urldownloadtofile|
+
+      control(?:click|focus|move|send|sendraw|settext|
+        get|(?:focus|pos|text)?)?|
+      if(?:equal|exist|greater|greaterorequal|instring|less|lessorequal|msgbox|
+        notequal|notexist|notinstring|winactive|winexist|winnotactive|
+        winnotexist)|
+      send(?:event|input|level|message|mode|play|raw)?|
+      set(?:batchlines|capslockstate|controldelay|
+        defaultmousespeed|env|format|keydelay|mousedelay|
+        numlockstate|scrolllockstate|storecapslockmode|regview|
+        timer|titlematchmode|windelay|workingdir)|
+      sound(?:beep|getwavevolume|get|play|setwavevolume|set)|
+      string(?:casesense|getpos|left|len|lower|mid|replace|right|split|trimleft|
+        trimright|upper)|
+
+      file(?:append|copydir|copy|createdir|createshortcut|delete|encoding|
+        install|movedir|move|readline|read|recycleempty|recycle|removedir|
+        select|selectfolder|setattrib|settime
+        get(?:attrib|shortcut|size|time|version))|
+      win(?:activatebottom|activate|hide|kill|maximize|close|
+        menuselectitem|minimizeallundo|minimizeall|minimize|move|
+        restore|settitle|set|show|waitactive|waitclose|
+        waitnotactive|wait|
+        get(?:activestats|activetitle|class|pos|text|title)?)
+    )\b
+
+  functions: |-
+    \b(?xi:abs|acos|asc|asin|atan|ceil|chr|cos|dllcall|exp|fileexist|fileopen|
+      floor|format|func|getkeyname|getkeyvk|getkeysc|getkeystate|il_add|
+      il_create|il_destroy|instr|isbyref|isfunc|islabel|isobject|ln|log|ltrim|
+      mod|onmessage|numget|numput|regexmatch|regexreplace|registercallback|
+      round|rtrim|sb_seticon|sb_setparts|sb_settext|sin|sqrt|substr|tan|trim|
+      varsetcapacity|winactive|winexist|
+
+      str(?:get|len|put|split|replace)|
+      comobj(?:create|active|array|connect|enwrap|error|flags|get|missing|
+        parameter|query|type|unwrap|value)|
+      lv_(?:add|delete|deletecol|getcount|getnext|gettext|insert|insertcol|
+        modifycol|modify|setimagelist)
+      tv_(?:add|delete|getchild|getcount|getnext|get|getparent|getprev|
+        getselection|gettext|modify|)
+    )\b
+  file_functions: |-
+    \b(?<=\.)(?xi:rawread|rawwrite|seek|tell|close|insert|remove|
+      minindex|maxindex|setcapacity|getcapacity|getaddress|newenum|haskey|clone|
+      isoptional|__new|__call|__get|__set|__delete|(?:read|write)(?:
+        line|uint|int|int64|short|ushort|char|uchar|double|float|)?
+    )\b
+
+  constants: |-
+    \b(?xi:clipboard|clipboardall|comspec|errorlevel|programfiles|true|false|
+      a_(?:ahkpath|ahkversion|appdata|appdatacommon|autotrim|batchlines|caretx|
+        carety|computername|controldelay|cursor|defaultmousespeed|desktop|
+        desktopcommon|detecthiddentext|detecthiddenwindows|endchar|eventinfo|
+        exitreason|fileencoding|formatfloat|formatinteger|iconfile|iconhidden|
+        iconnumber|icontip|index|ipaddress[1-4]|is64bitos|isadmin|iscompiled|
+        iscritical|ispaused|issuspended|isunicode|keydelay|language|lasterror|
+        linefile|linenumber|loopreadline|loopregkey|loopregname|loopregsubkey|
+        loopregtimemodified|loopregtype|mousedelay|mydocuments|numbatchlines|
+        ostype|osversion|priorhotkey|priorkey|programfiles|programs|
+        programscommon|ptrsize|regview|screendpi|screenheight|screenwidth|
+        scriptdir|scriptfullpath|scripthwnd|scriptname|space|startmenu|
+        startmenucommon|startup|startupcommon|stringcasesense|tab|temp|
+        tickcount|timeidle|timeidlephysical|timesincepriorhotkey|
+        timesincethishotkey|titlematchmode|titlematchmodespeed|username|
+        windelay|windir|workingdir|
+
+        (?:d{2,4}|hour|mday|min|m{2,4}|mon|msec|now|nowutc|sec|wday|yday|year|
+          yweek|yyyy)|
+        gui(?:event|control|controlevent|height|width|x|y|)?|
+        loopfile(?:attrib|dir|ext|fullpath|longpath|name|shortname|
+          shortpath|size|sizekb|sizemb|timeaccessed|timecreated|timemodified))
+        this(?:func|hotkey|label|menu(?:item(?:pos)?)?)|
+    )\b
+
+  # do not precede (, [ and .
+  stmt2: |-
+    \b(?<=\.)(?xi:length|ateof|encoding|__handle|name|isbuiltin|isvariadic|
+      minparams|maxparams|position|pos)\b
+  constants2: |-
+    \b(?<!\.)(?xi:pixel|mouse|screen|relative|rgb|ltrim|rtrim|join|low|
+      belownormal|normal|abovenormal|high|realtime|ahk_id|ahk_pid|ahk_class|
+      ahk_group|between|containsinteger|float|integerfast|floatfast|number|
+      digit|xdigit|alpha|upper|lower|alnum|time|date|alwaysontop|topmost|top|
+      bottom|transparent|transcolor|redraw|region|id|idlast|processname|minmax|
+      controllist|count|list|capacity|statuscd|eject|lock|unlock|label|
+      filesystem|label|setlabel|serial|type|status|static|global|local|byref|
+      seconds|minutes|hours|days|read|parse|logoff|close|error|single|tray|add|
+      rename|check|uncheck|togglecheck|enable|disable|toggleenable|default|
+      nodefault|standard|nostandard|color|delete|deleteall|icon|noicon|tip|
+      click|show|mainwindow|nomainwindow|useerrorlevel|text|picture|pic|
+      groupbox|button|checkbox|radio|dropdownlist|ddl|combobox|listbox|listview|
+      datetime|monthcal|updown|slider|tab|tab2|statusbar|treeview|iconsmall|
+      tile|report|sortdesc|nosort|nosorthdr|grid|hdr|autosize|range|xm|ym|ys|xs|
+      xp|yp|font|resize|owner|submit|nohide|minimize|maximize|restore|
+      noactivate|na|cancel|destroy|center|margin|maxsize|minsize|owndialogs|
+      guiescape|guiclose|guisize|guicontextmenu|guidropfiles|tabstop|section|
+      altsubmit|wrap|hscroll|vscroll|border|top|bottom|buttons|expand|first|
+      imagelist|lines|wantctrla|wantf2|vis|visfirst|number|uppercase|lowercase|
+      limit|password|multi|wantreturn|group|background|bold|italic|strike|
+      underline|norm|backgroundtrans|theme|caption|delimiter|minimizebox|
+      maximizebox|sysmenu|toolwindow|flash|style|exstyle|check3|checked|
+      checkedgray|readonly|password|hidden|left|right|center|notab|section|move|
+      focus|hide|choose|choosestring|text|pos|enabled|disabled|visible|
+      lastfound|lastfoundexist|alttab|shiftalttab|alttabmenu|alttabandmenu|
+      alttabmenudismiss|notimers|interrupt|priority|waitclose|blind|raw|unicode|
+      deref|pow|bitnot|bitand|bitor|bitxor|bitshiftleft|bitshiftright|yes|no|ok|
+      cancel|abort|retry|ignore|tryagain|on|off|all|hkey_local_machine|
+      hkey_users|hkey_current_user|hkey_classes_root|hkey_current_config|hklm|
+      hku|hkcu|hkcr|hkcc|reg_sz|reg_expand_sz|reg_multi_sz|reg_dword|reg_qword|
+      reg_binary|reg_link|reg_resource_list|reg_full_resource_descriptor|
+      reg_resource_requirements_list|reg_dword_big_endian|alwayson|alwaysoff|
+      dpiscale|parent)(?!\[|\(|\.)\b
+
+  hotkeys: |-
+    \b(?xi:
+      appskey|mbutton|wheelleft|wheelright|xbutton1|xbutton2|
+      space|tab|enter|escape|esc|backspace|bs|delete|del|insert|
+      ins|pgup|pgdn|home|end|up|down|left|right|printscreen|ctrlbreak|pause|
+      scrolllock|capslock|numlock|
+
+      volume_mute|volume_down|volume_up|
+      media_next|media_prev|media_stop|media_play_pause|
+      launch_mail|launch_media|launch_app1|launch_app2|
+      browser_(?:back|forward|refresh|stop|search|favorites|home)|
+
+      (?:(?:alt|shift|ctrl|wheel)(?:up|down))|
+      [lr]?(?:shift|ctrl|alt|control)|[lr](?:win|windown|winup|button)|
+
+      f(?:1?[1-9]|10|2[0-4])|
+      joy(?:[12]?[1-9]|[123]0|31|32|[xyzruv]|pov|name|buttons|axes|info)|
+      numpad(?:\d|mult|add|sub|div|dot|del|ins|clear|up|down|left|right|home|
+        end|pgup|pgdn|enter)
+    )\b
+  keywords: |-
+    \b(?<!\.)(?xi:if|else|return|loop|break|for|while|class|extends|catch|
+      finally|throw|try|until|continue|critical|exit|exitapp|gosub|goto|
+      not|or|and|is|in)\b
+
+contexts:
+  prototype:
+    - include: comments
+
+  main:
+    - include: keywords
+    - include: statements
+    - include: strings
+    - match: ({{punctuation}})
+      scope: punctuation.ahk
+
+  keywords:
+    - match: ({{keywords}}|{{constants}})
+      scope: keyword.control.ahk
+
+  statements:
+    - match: ^\s*([#!^+<>*~$]*)((?i:{{hotkeys}}|\w|\s*|&|/)*)(::)
+      captures:
+        1: punctuation.definition.hotkey.ahk
+        2: entity.name.hotkey.ahk
+        3: punctuation.section.block.ahk
+    - match: (?:({{stmt}})|(#(?:{{imports}}|{{directives}})))
+      captures:
+        1: support.function.ahk
+        2: keyword.import.ahk
+      push:
+        - meta_content_scope: string.unquoted.ahk
+        - match: (\{)((?:{{hotkeys}}|\s|)+)(})
+          captures:
+            1: punctuation.definition.placeholder.begin.ahk
+            2: keyword.hotkey.ahk
+            3: punctuation.definition.placeholder.end.ahk
+        - include: numbers
+        - match: \,
+          scope: punctuation.separator.ahk
+        - match: $\n?
+          pop: true
+
+  numbers:
+    - match: \b\d+\b
+      scope: constant.numeric.ahk
+
+  strings:
+    - match: '"'
+      scope: punctuation.definition.string.begin.ahk
+      push: inside_string
+
+  inside_string:
+    - meta_include_prototype: false
+    - meta_scope: string.quoted.double.ahk
+
+    - match: '\.'
+      scope: constant.character.escape.ahk
+    - match: '"'
+      scope: punctuation.definition.string.end.ahk
+      pop: true
+
+  comments:
+    - match: ';'
+      scope: punctuation.definition.comment.ahk
+      push:
+        - meta_scope: comment.line.double-slash.ahk
+        - match: $\n?
+          pop: true
+    - match: '/\*'
+      scope: punctuation.definition.comment.ahk
+      push:
+        - meta_scope: comment.block.ahk
+        - match: '\*/'
+          pop: true

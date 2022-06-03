@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+	<key>scope</key>
+	<string>source.ice</string>
+	<key>settings</key>
+	<dict>
+		<key>shellVariables</key>
+		<array>
+			<dict>
+				<key>name</key>
+				<string>TM_COMMENT_START</string>
+				<key>value</key>
+				<string># </string>
+			</dict>
+			<dict>
+				<key>name</key>
+				<string>TM_LINE_TERMINATOR</string>
+				<key>value</key>
+				<string>:</string>
+			</dict>
+		</array>
+
+		<key>decreaseIndentPattern</key>
+		<string>^\s*(elif|else)\b.*:</string>
+		<key>increaseIndentPattern</key>
+		<string>^\s*((elif|else|if|while)\b.*|\w*\(.*\)|@.*):\s*(#.*)?$</string>
+		<key>disableIndentNextLinePattern</key>
+		<string></string>
+	</dict>
+</dict>
+
+<dict>
+	<key>scope</key>
+	<string>
+		source.ice entity.name.function,
+		source.ice entity.name.label entity.name.class
+	</string>
+	<key>settings</key>
+	<dict>
+		<key>showInIndexedSymbolList</key>
+		<integer>1</integer>
+		<key>showInSymbolList</key>
+		<integer>1</integer>
+	</dict>
+</dict>
+
+</plist>

@@ -1,0 +1,15 @@
+%YAML 1.2
+---
+name: Make Output
+hidden: true
+scope: text.build_output
+contexts:
+  main:
+    - match: '^(..[^:\n]*):([0-9]+):?([0-9]+)?:? '
+      scope: entity.name.filename.build_output
+    - match: '\b(warning|error)(?=: )'
+      scope: message.error.build_output
+    - match: '^\[.+\]$'
+      scope: comment.build_output
+    - match: '^\s+\^~*$'  # better selectors?
+      scope: message.error.build_output

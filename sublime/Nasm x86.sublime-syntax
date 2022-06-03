@@ -1,0 +1,173 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+name: NASM x86
+file_extensions:
+  - nasm
+scope: source.nasm
+
+variables:
+  segment: (?i:segment|section)
+  keywords: |-
+    \b(?xi:
+      equ|(d|res)[bwdqtoyz]|times|
+      global|extern
+    )\b|\$
+  sizes: \b(?i:byte|[qd]?word)\b
+  instructions: |-
+    \b(?xi:
+     call|ret|int|syscall|(pop|push)a?|xchg|
+     j(mp|n?([scopez]|[bagl]e?)|p[oe]|xcz)
+    )\b
+  operations: |-
+    \b(?xi:
+      sh[rl]d?|sa[rl]|
+      x?or|and|not|
+      inc|dec|neg|
+      mov|add|sub|cmp|
+      cmov(n?([scopez]|[bagl]e?)|p[oe]|xcz)|
+      i?(mul|div)
+    )\b
+  spreg: (s[pi]|bp|di)
+  reg: |-
+    \b(?xi:
+      [er]?([abcd]x|{{spreg}})|
+      {{spreg}}l|
+      [abcd][lh]|
+      r(8|9|1[0-5])[bwd]?|
+      xmm(\d|1[0-5])
+    )\b
+  reserved: |-
+    (?x:)(?:{{segment}}|{{keywords}}|{{sizes}}|{{instructions}}|{{operations}}|{{reg}})
+  identifiers: (?i:[a-z\._?$][a-z\._?$#@~\d]*)
+
+contexts:
+  main:
+    # The main context is the initial starting point of our syntax.
+    # Include other contexts from here (or specify them directly).
+    - include: labels
+    - include: identifiers
+    - include: keywords
+    - include: comments
+    - include: macros
+
+    - match: (%)(\d+)
+      captures:
+        1: punctuation.definition.variable.nasm
+        2: constant.numeric.variable.macro.nasm
+    - match: (["'])(.*?)(\1)
+      captures:
+        1: punctuation.definition.string.begin.nasm
+        2: string.quoted.nasm
+        3: punctuation.definition.string.end.nasm
+    - match: (["'])(.*)(\n?)
+      captures:
+        1: punctuation.definition.string.begin.nasm
+        2: string.quoted.nasm
+        3: invalid.illegal.eof.nasm
+    - match: (`)
+      scope: punctuation.definition.string.begin.nasm
+      push: instring
+    - match: '\b(?:0[xh]\h+|0[by][01]+|\d+d?)\b'
+      scope: constant.numeric.nasm
+    - match: '[]\[(,)%/+*-]'
+      scope: punctuation.nasm
+
+  keywords:
+    - match: ({{reg}})
+      scope: variable.language.nasm
+    - match: ({{operations}})
+      scope: keyword.operator.nasm
+    - match: ({{instructions}})
+      scope: keyword.operator.instruction.nasm
+    - match: ({{sizes}})
+      scope: storage.size.nasm
+    - match: ({{keywords}}|%endmacro)
+      scope: keyword.nasm
+    - match: ^\s*({{segment}})\s+({{reserved}})
+      captures:
+        1: keyword.declaration.nasm
+        2: invalid.illegal.name.nasm
+    - match: ^\s*({{segment}} )(\..+?\b)
+      captures:
+        1: keyword.declaration.nasm
+        2: entity.name.section.nasm
+    - match: ^\s*(%macro )(?i:([a-z]\w*)\b)
+      captures:
+        1: keyword.definition.macro.nasm
+        2: entity.name.macro.nasm
+
+  labels:
+    - match: ^\s*?(?={{reserved}}\s*:)
+      scope: label.nasm
+      push:
+        - match: ({{reserved}})
+          scope: invalid.illegal.name.nasm
+        - match: (:)
+          scope: punctuation.label.nasm
+          pop: true
+    - match: ^\s*({{identifiers}})\s*(:)
+      captures:
+        1: entity.name.label.nasm
+        2: punctuation.label.nasm
+
+  identifiers:
+    - match: (?=\$[a-z\._?$#@~]|(?!{{reserved}}))({{identifiers}})
+      scope: meta.identifier.nasm
+
+  comments:
+    - match: ";"
+      scope: punctuation.definition.comment.nasm
+      push:
+        - meta_scope: comment.line.number-sign.nasm
+        - match: \n
+          pop: true
+
+  macros:
+    - match: (%i?macro)
+      scope:
+
+  instring:
+    - meta_scope: string.quoted.back.nasm
+    - match: \`
+      scope: punctuation.definition.string.end.nasm
+      pop: true
+    - match: '\\u'
+      scope: constant.character.escape.unicode.nasm
+      push:
+        - match: \h{4}
+          scope: constant.character.escape.unicode.nasm
+          pop: true
+        - match: (.{,3})(?=\`)|.{4}
+          scope: invalid.illegal.escape.nasm
+          pop: true
+    - match: '\\U'
+      scope: constant.character.escape.unicode.nasm
+      push:
+        - match: \h{8}
+          scope: constant.character.escape.unicode.nasm
+          pop: true
+        - match: (.{,7})(?=\`)|.{8}
+          scope: invalid.illegal.escape.nasm
+          pop: true
+    - match: '\\x'
+      scope: constant.character.escape.hex.nasm
+      push:
+        - match: \h\h?
+          scope: constant.character.escape.hex.nasm
+          pop: true
+        - match: .[^`]?
+          scope: invalid.illegal.escape.nasm
+          pop: true
+    - match: '\\'
+      scope: constant.character.escape.nasm
+      push:
+        - match: (['"`\\?abtnvfre])
+          scope: constant.character.escape.nasm
+          pop: true
+        - match: ([0-3]?[0-7]{1,2})
+          scope: constant.character.octal.nasm
+          pop: true
+        - match: .
+          scope: invalid.illegal.escape.nasm
+          pop: true

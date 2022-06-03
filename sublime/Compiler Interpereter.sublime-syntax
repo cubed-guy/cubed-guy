@@ -1,0 +1,40 @@
+%YAML 1.2
+---
+name: Compiler Interpreter
+file_extensions:
+  - ci
+scope: source.ci
+
+contexts:
+  main:
+    - match: '(#)\s*(.*)'
+      captures:
+        1: punctuation.definition.state.ci
+        2: entity.name.state.ci
+
+    - match: '[$.,@~!&|^+\-*/%=]'
+      scope: keyword.operator.ci
+
+    - match: (match)(:)
+      captures:
+        1: keyword.match.ci
+        2: punctuation.ci
+      embed: scope:source.regexp
+      embed_scope: string.regex.ci
+      escape: $\n?
+
+    - match: write
+      scope: keyword.write.ci
+      embed: scope:source.nasm
+      escape: ^(?!\t|$)
+
+    - match: (set|push)
+      scope: keyword.control.ci
+
+    - match: \d+
+      scope: constant.numeric.ci
+
+    - match: (\')(\S*)
+      captures:
+        1: punctuation.definition.string.ci
+        2: string.one-sided.ci

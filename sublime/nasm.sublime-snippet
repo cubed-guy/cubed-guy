@@ -1,0 +1,23 @@
+<snippet><content><![CDATA[global _main
+extern _printf
+
+section .data
+_p: db `%u\n`, 0
+
+section .bss
+
+section .text
+_main:
+${0}
+
+push eax
+push _p
+call _printf
+add esp, 8
+
+xor eax, eax
+ret]]></content>
+	<tabTrigger>!asm</tabTrigger>
+	<scope>source.nasm - comment - string</scope>
+	<description>Nasm x86 Boilerplate</description>
+</snippet>

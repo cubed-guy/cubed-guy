@@ -1,0 +1,18 @@
+{
+	"bootstrapped": true,
+	"in_process_packages":
+	[
+	],
+	"installed_packages":
+	[
+		"A File Icon",
+		"AutoHotkey",
+		"CUDA C++",
+		"Fuzzy Clock",
+		"Material Theme",
+		"MCFunction",
+		"Package Control",
+		"PackageDev",
+		"Tabnine",
+	],
+}

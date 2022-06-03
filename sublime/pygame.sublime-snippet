@@ -1,0 +1,67 @@
+<snippet><content><![CDATA[import pygame
+from pygame.locals import *
+pygame.font.init()
+font = pygame.font.Font('../Product Sans Regular.ttf', 16)
+
+c = type('c', (), {'__matmul__': (lambda s, x: (*x.to_bytes(3, 'big'),)), '__sub__': (lambda s, x: (x&255,)*3)})()
+bg = c${1:-34}
+fg = c@0xff9088
+
+fps = ${2:60}
+
+w, h = res = (1280, 720)
+
+def updateStat(msg = None, update = True):
+	rect = (0, h-20, w, 21)
+	display.fill(c-0, rect)
+
+	tsurf = font.render(msg or '', True, c--1)
+	display.blit(tsurf, (5, h-20))
+
+	if update: pygame.display.update(rect)
+
+def resize(size):
+	global w, h, res, display
+	w, h = res = size
+	display = pygame.display.set_mode(res, RESIZABLE)
+	updateDisplay()
+
+def updateDisplay():
+	display.fill(bg)
+	updateStat(update = False)
+	pygame.display.flip()
+
+def toggleFullscreen():
+	global pres, res, w, h, display
+	res, pres =  pres, res
+	w, h = res
+	if display.get_flags()&FULLSCREEN: resize(res)
+	else: display = pygame.display.set_mode(res, FULLSCREEN); updateDisplay()
+
+resize(res)
+pres = pygame.display.list_modes()[0]
+
+clock = pygame.time.Clock()
+running = True
+while running:
+	for event in pygame.event.get():
+		if event.type == KEYDOWN:
+			if   event.key == K_ESCAPE: running = False
+			elif event.key == K_F11: toggleFullscreen()
+
+		elif event.type == VIDEORESIZE:
+			if not display.get_flags()&FULLSCREEN: resize(event.size)
+		elif event.type == QUIT: running = False
+		elif event.type == MOUSEBUTTONDOWN:
+			if event.button in (4, 5):
+				delta = event.button*2-9
+			elif event.button == 1:
+				${0:pass}
+
+	updateDisplay()
+	updateStat()
+	clock.tick(fps)]]></content>
+	<tabTrigger>!pg</tabTrigger>
+	<scope>source.python - meta.function.parameters - meta.function-call - meta.statement - meta.mapping - meta.sequence - meta.set - comment - string</scope>
+	<description>Pygame Boilerplate</description>
+</snippet>

@@ -1,0 +1,43 @@
+%YAML 1.2
+---
+name: Hex+
+file_extensions:
+  - hhex
+scope: source.hhex
+
+contexts:
+  main:
+    - include: val
+    - include: escape
+    - include: string
+    - include: comments
+
+
+  val:
+    - match: "00"
+      scope: punctuation.definition.numeric.octal.hhex
+    - match: '\h{2}'
+      scope: meta.generic-name.hhex
+
+  escape:
+    - match: '\\[1-9]'
+      scope: constant.character.escape.hhex
+    - match: '\\0'
+      scope: punctuation.definition.numeric.octal.hhex
+
+  string:
+    - match: "'"
+      scope: punctuation.definition.string.begin.hhex
+      push:
+        - meta_content_scope: string.quoted.single.hhex
+        - match: "'"
+          scope: punctuation.definition.string.end.hhex
+          pop: true
+
+  comments:
+    - match: "#"
+      scope: punctuation.definition.comment.hhex
+      push:
+        - meta_scope: comment.line.number-sign.hhex
+        - match: \n
+          pop: true

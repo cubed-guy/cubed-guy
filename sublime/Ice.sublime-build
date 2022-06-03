@@ -1,0 +1,6 @@
+{
+	"cmd": ["python", "C:\\Stuff\\Code\\ice\\compiler.py", "$file", "-d"],
+	"file_regex": "File \"(...*?)\", line ([0-9]*)",
+	"selector": "source.ice",
+	"working_dir": "C:\\Stuff\\Code\\ice"
+}

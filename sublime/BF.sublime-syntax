@@ -1,0 +1,19 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+file_extensions:
+  - bf
+scope: source.bf
+
+contexts:
+  main:
+    - match: \]|\[
+      scope: keyword.control.bf
+    - match: \+|-
+      scope: constant.numeric.bf
+    - match: <|>
+      scope: keyword.operator.bf
+    - match: \.|,
+      scope: support.function.builtin.bf
+    - match: '[^]\[<>,\.+-]'
+      scope: comment.bf

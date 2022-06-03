@@ -1,0 +1,8 @@
+<snippet><content><![CDATA[push ${0:eax}
+push _p
+call _printf
+add esp, 8]]></content>
+	<tabTrigger>printf</tabTrigger>
+	<scope>source.nasm - comment - string</scope>
+	<description>Nasm x86 _printf</description>
+</snippet>

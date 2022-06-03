@@ -1,0 +1,2133 @@
+%YAML 1.2
+---
+name: Two Hour Language
+file_extensions:
+  - 2hl
+first_line_match: ^#!\s*/.*\bpython(\d(\.\d)?)?\b
+scope: source.2hl
+
+variables:
+  # We support unicode here because Python 3 is the future
+  identifier_continue: '[[:alnum:]_]'
+  identifier: '\b[[:alpha:]_]{{identifier_continue}}*\b'
+  identifier_constant: '\b(?:[\p{Lu}_][\p{Lu}_\d]*)?[\p{Lu}]{2,}[\p{Lu}_\d]*\b'  # require 2 consecutive upper-case letters
+  digitpart: (?:\d(?:_?\d)*)
+  path: '({{identifier}}[ ]*\.[ ]*)*{{identifier}}'
+  sql_indicator: \s*(?:SELECT|INSERT|UPDATE|DELETE|CREATE|REPLACE|ALTER|WITH)\b
+  illegal_names: (?:and|as|assert|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|not|or|pass|raise|return|try|while|with|yield)
+  format_spec: |-
+    (?x:
+      (?:.? [<>=^])?     # fill align
+      [ +-]?             # sign
+      \#?                # alternate form
+      # technically, octal and hexadecimal integers are also supported as 'width', but rarely used
+      \d*                # width
+      ,?                 # thousands separator
+      (?:\.\d+)?         # precision
+      [bcdeEfFgGnosxX%]? # type
+    )
+  strftime_spec: '(?:%(?:[aAwdbBGmyYHIpMSfzZjuUVWcxX%]|-[dmHIMSj]))'
+  # This can be used in look-aheads to parse simple expressions.
+  # Can't be recursive, because sregex doesn't support that,
+  # so we're skipping parentheses.
+  # Can't parse multiple lines as well, for obvious reasons
+  simple_expression: |-
+    (?x:
+      \s+                      # whitespace
+      | [urfb]*"(?:\\.|[^"])*" # strings
+      | [urfb]*'(?:\\.|[^'])*' # ^
+      | [\d.ej]+               # numerics
+      | ([+*/%@-]|,) | // | and | or # operators
+      | {{path}}               # a path
+    )*
+
+
+
+contexts:
+  main:
+    - include: statements
+
+  statements:
+    - include: docstrings
+    - include: line-statements
+    - include: block-statements
+    - include: classes
+    - include: functions
+    - include: modifiers
+    - include: assignments
+    - match: ;
+      scope: punctuation.terminator.statement.2hl
+    - include: line-expressions
+
+  line-statements:
+    - include: imports
+    - include: decorators
+    - match: \b(raise)\b
+      scope: keyword.control.flow.raise.2hl
+      push:
+        - meta_scope: meta.statement.raise.2hl
+        - include: line-continuation-or-pop
+        - match: \b(from)\b
+          scope: keyword.control.flow.raise.from.2hl
+          set:
+            - meta_scope: meta.statement.raise.2hl
+            - include: line-continuation-or-pop
+            - include: expressions
+        - include: expressions
+    - match: \b(assert)\b
+      scope: keyword.other.assert.2hl
+    - match: \b(del)\b
+      scope: keyword.other.del.2hl
+    - match: \b(print)\b(?! *([,.()\]}]))
+      scope: keyword.other.print.2hl
+    - match: \b(exec)\b(?! *($|[,.()\]}]))
+      scope: keyword.other.exec.2hl
+    - match: \b(return)\b
+      scope: keyword.control.flow.return.2hl
+    - match: \b(break)\b
+      scope: keyword.control.flow.break.2hl
+    - match: \b(continue)\b
+      scope: keyword.control.flow.continue.2hl
+    - match: \b(pass)\b
+      scope: keyword.control.flow.pass.2hl
+    - match: ':'
+      scope: punctuation.separator.annotation.variable.2hl
+
+  imports:
+    - match: \b(import)\b
+      scope: keyword.control.import.2hl
+      push:
+        - meta_scope: meta.statement.import.2hl
+        - include: line-continuation-or-pop
+        - match: ','
+          scope: punctuation.separator.import-list.2hl
+        - match: \.
+          scope: invalid.illegal.unexpected-relative-import.2hl
+        - include: import-alias
+        - include: qualified-name
+        - match: (?=\S)
+          pop: true
+    - match: \b(from)\b
+      scope: keyword.control.import.from.2hl
+      push:
+        - meta_scope: meta.statement.import.2hl
+        - meta_content_scope: meta.import-source.2hl
+        - include: line-continuation-or-pop
+        - match: \b(import)\b
+          scope: keyword.control.import.2hl
+          set:
+            - meta_scope: meta.statement.import.2hl
+            - include: line-continuation-or-pop
+            - match: ' *(\()'
+              captures:
+                1: punctuation.section.import-list.begin.2hl
+              set:
+                - meta_scope: meta.statement.import.2hl
+                - include: comments
+                - match: \)
+                  scope: punctuation.section.import-list.end.2hl
+                  pop: true
+                - include: import-name-list
+                - match: (?=\S)
+                  pop: true
+            - match: ''
+              set:
+                - meta_scope: meta.statement.import.2hl
+                - include: line-continuation-or-pop
+                - include: import-name-list
+                - match: (?=\S)
+                  pop: true
+            - match: (?=\S)
+              pop: true
+        - include: import-from-name
+        - match: (?=\S)
+          pop: true
+
+  import-name-list:
+    - match: ','
+      scope: punctuation.separator.import-list.2hl
+    - include: import-alias
+    - include: name
+    - match: \*
+      scope: constant.language.import-all.2hl
+    - match: \S+
+      scope: invalid.illegal.name.import.2hl
+
+  import-alias:
+    - match: \b(as)\b
+      scope: keyword.control.import.as.2hl
+
+  import-from-name:
+    - match: \.+
+      scope: meta.import-path.2hl keyword.control.import.relative.2hl
+    - match: (?={{path}})
+      push:
+        - meta_scope: meta.import-path.2hl
+        - match: '{{illegal_names}}\b'
+          scope: invalid.illegal.name.2hl
+        - match: '{{identifier}}'
+          scope: meta.import-name.2hl
+        - match: \s*(\.) *(?:({{illegal_names}}\b)|({{identifier}}))
+          captures:
+            1: punctuation.accessor.dot.2hl
+            2: invalid.illegal.name.2hl
+            3: meta.import-name.2hl
+        - match: \ *(\. *\S+) # matches and consumes the remainder of "abc.123" or "abc.+"
+          captures:
+            1: invalid.illegal.name.2hl
+          pop: true
+        - match: ''
+          pop: true
+
+  block-statements:
+    # async for ... in ...:
+    - match: \b(async +)?(for)\b
+      captures:
+        1: storage.modifier.async.2hl
+        2: keyword.control.flow.for.2hl
+      push:
+        - meta_scope: meta.statement.for.2hl
+        - include: line-continuation-or-pop
+        - match: \b(in)\b
+          scope: keyword.control.flow.for.in.2hl
+          set:
+            - meta_scope: meta.statement.for.2hl
+            - include: line-continuation-or-pop
+            - match: ':'
+              scope: punctuation.section.block.for.2hl
+              pop: true
+            - include: expressions
+        - match: ':'
+          scope: invalid.illegal.missing-in.2hl
+          pop: true
+        - include: target-list
+    # async with ... as ...:
+    - match: \b(async +)?(with)\b
+      captures:
+        1: storage.modifier.async.2hl
+        2: keyword.control.flow.with.2hl
+      push: with-body
+    # except ... as ...:
+    - match: \b(except)\b
+      scope: keyword.control.flow.except.2hl
+      push:
+        - meta_scope: meta.statement.except.2hl
+        - include: line-continuation-or-pop
+        - match: ':'
+          scope: punctuation.section.block.except.2hl
+          pop: true
+        - match: '\b(as)\b'
+          scope: keyword.control.flow.as.2hl
+          set:
+            - meta_content_scope: meta.statement.except.2hl
+            - include: line-continuation-or-pop
+            - match: ':'
+              scope: meta.statement.except.2hl punctuation.section.block.except.2hl
+              pop: true
+            - include: name
+        - include: target-list
+    - match: \bif\b
+      scope: keyword.control.flow.conditional.2hl
+      push:
+        - meta_scope: meta.statement.if.2hl
+        - include: line-continuation-or-pop
+        - match: ':'
+          scope: punctuation.section.block.conditional.2hl
+          pop: true
+        - include: expressions
+    - match: \bwhile\b
+      scope: keyword.control.flow.while.2hl
+      push:
+        - meta_scope: meta.statement.while.2hl
+        - include: line-continuation-or-pop
+        - match: ':'
+          scope: punctuation.section.block.while.2hl
+          pop: true
+        - include: expressions
+    - match: \b(else)\b(?:\s*(:))?
+      scope: meta.statement.conditional.2hl
+      captures:
+        1: keyword.control.flow.conditional.2hl
+        2: punctuation.section.block.2hl
+    - match: \b(try)\b(?:\s*(:))?
+      scope: meta.statement.try.2hl
+      captures:
+        1: keyword.control.flow.try.2hl
+        2: punctuation.section.block.try.2hl
+    - match: \b(finally)\b(?:\s*(:))?
+      scope: meta.statement.finally.2hl
+      captures:
+        1: keyword.control.flow.finally.2hl
+        2: punctuation.section.block.finally.2hl
+    - match: \belif\b
+      scope: keyword.control.flow.conditional.2hl
+      push:
+        - meta_scope: meta.statement.conditional.2hl
+        - match: ':'
+          scope: punctuation.section.block.2hl
+          pop: true
+        - match: $\n?
+          pop: true
+        - include: line-expressions
+
+  with-body:
+    - meta_scope: meta.statement.with.2hl
+    - include: line-continuation-or-pop
+    - match: \b(as)\b
+      scope: keyword.control.flow.with.as.2hl
+      set: with-as
+    - match: ':'
+      scope: punctuation.section.block.with.2hl
+      pop: true
+    - match: ','
+      scope: punctuation.separator.with-resources.2hl
+    - include: expressions
+
+  with-as:
+    - meta_scope: meta.statement.with.2hl
+    - include: line-continuation-or-pop
+    - match: ':'
+      scope: punctuation.section.block.with.2hl
+      pop: true
+    - match: ','
+      scope: punctuation.separator.with-resources.2hl
+      set: with-body
+    - include: name
+    - include: groups
+    - include: lists
+
+  expressions-common:
+    - include: comments
+    - include: constants
+    - include: numbers
+    - include: yields
+    - include: operators
+    - include: lambda
+    - match: \b(await)\b
+      scope: keyword.other.await.2hl
+    - include: inline-if
+    - include: strings
+    - include: function-calls
+    - include: item-access
+    - include: lists
+    - include: dictionaries-and-sets
+    - include: tuples
+    - include: groups
+    - match: \)
+      scope: invalid.illegal.stray.brace.round.2hl
+    - match: \]
+      scope: invalid.illegal.stray.brace.square.2hl
+    - match: \}
+      scope: invalid.illegal.stray.brace.curly.2hl
+    - match: \,
+      scope: punctuation.separator.sequence.2hl
+    - include: line-continuation
+
+  line-expressions: # Always include this last!
+    - include: expressions-common
+    - include: qualified-name
+
+  expressions: # Always include this last!
+    # Differs from the line scope in that invalid-name matches will pop the current context
+    # and matches accessors continued on a different line
+    - include: expressions-common
+    - include: illegal-names-pop
+    - include: qualified-name
+    - match: '(\.) *(?={{identifier}})'
+      captures:
+        1: punctuation.accessor.dot.2hl
+      push:
+        - include: magic-function-names
+        - include: magic-variable-names
+        - include: illegal-names
+        - include: generic-names
+        - match: ''
+          pop: true
+
+  after-expression:
+    # direct function call
+    - match: '\s*(\()'
+      captures:
+        1: punctuation.section.arguments.begin.2hl
+      push:
+        - meta_scope: meta.function-call.arguments.2hl
+        - match: \)
+          scope: punctuation.section.arguments.end.2hl
+          pop: true
+        - include: arguments
+    # item access
+    - match: '\s*(\[)'
+      captures:
+        1: meta.item-access.2hl punctuation.section.brackets.begin.2hl
+      push:
+        - meta_content_scope: meta.item-access.arguments.2hl
+        - match: \]
+          scope: meta.item-access.2hl punctuation.section.brackets.end.2hl
+          pop: true
+        - match: ':'
+          scope: punctuation.separator.slice.2hl
+        - include: expressions
+    # indirect function call following attribute access
+    - include: function-calls
+    # arbitrary attribute access
+    - match: '\s*(\.)'
+      captures:
+        1: punctuation.accessor.dot.2hl
+      push:
+        - include: magic-function-names
+        - include: magic-variable-names
+        - include: illegal-names
+        - include: generic-names
+        - match: ''
+          pop: true
+    - match: ''
+      pop: true
+
+  comments:
+    - match: "#"
+      scope: punctuation.definition.comment.2hl
+      push:
+        - meta_scope: comment.line.number-sign.2hl
+        - match: \n
+          pop: true
+
+  constants:
+    - match: \b(None|True|False|Ellipsis|NotImplemented|__debug__)\b
+      scope: constant.language.2hl
+    - match: \.{3}(?!\w)
+      scope: constant.language.2hl
+
+  numbers:
+    # https://docs.python.org/3/reference/lexical_analysis.html#numeric-literals
+    # hexadecimal
+    - match: \b(?i)(0x)\h*(L) # py2
+      scope: constant.numeric.integer.long.hexadecimal.2hl
+      captures:
+        1: punctuation.definition.numeric.hexadecimal.2hl
+        2: storage.type.numeric.long.2hl
+    - match: \b(?i)(0x)(_?\h)+
+      scope: constant.numeric.integer.hexadecimal.2hl
+      captures:
+        1: punctuation.definition.numeric.hexadecimal.2hl
+    # octal
+    - match: \b(?i)(0o?)(?=o|[0-7])[0-7]*(L) # py2
+      scope: constant.numeric.integer.long.octal.2hl
+      captures:
+        1: punctuation.definition.integer.octal.2hl
+        2: storage.type.numeric.long.2hl
+    - match: \b(?i)(0)[0-7]+ # py2
+      scope: constant.numeric.integer.octal.2hl
+      captures:
+        1: punctuation.definition.numeric.octal.2hl
+    - match: \b(?i)(0o)(_?[0-7])+
+      scope: constant.numeric.integer.octal.2hl
+      captures:
+        1: punctuation.definition.numeric.octal.2hl
+    # binary
+    - match: \b(?i)(0b)[01]*(L) # py2
+      scope: constant.numeric.integer.long.binary.2hl
+      captures:
+        1: punctuation.definition.numeric.binary.2hl
+        2: storage.type.numeric.long.2hl
+    - match: \b(?i)(0b)(_?[01])*
+      scope: constant.numeric.integer.binary.2hl
+      captures:
+        1: punctuation.definition.numeric.binary.2hl
+    # complex
+    - match: (?i){{digitpart}}?(\.){{digitpart}}(?:e[\-\+]?{{digitpart}})?(j) # mandatory fraction
+      scope: constant.numeric.complex.2hl
+      captures:
+        1: punctuation.separator.decimal.2hl
+        2: storage.type.numeric.complex.2hl
+    - match: \b(?i)(?:{{digitpart}}(?:(\.){{digitpart}}?)?|(\.){{digitpart}})(?:e[\-\+]?{{digitpart}})(j) # mandatory exponent
+      scope: constant.numeric.complex.2hl
+      captures:
+        1: punctuation.separator.decimal.2hl
+        2: punctuation.separator.decimal.2hl
+        3: storage.type.numeric.complex.2hl
+    - match: (?i){{digitpart}}(\.)?(j) # mandatory digitpart
+      scope: constant.numeric.complex.2hl
+      captures:
+        1: punctuation.separator.decimal.2hl
+        2: storage.type.numeric.complex.2hl
+    # floating point
+    - match: (?i){{digitpart}}?(\.){{digitpart}}(?:e[\-\+]?{{digitpart}})? # mandatory fraction
+      scope: constant.numeric.float.2hl
+      captures:
+        1: punctuation.separator.decimal.2hl
+    - match: \b(?i)(?:{{digitpart}}(?:(\.){{digitpart}}?)?|(\.){{digitpart}})(?:e[\-\+]?{{digitpart}}) # mandatory exponent
+      scope: constant.numeric.float.2hl
+      captures:
+        1: punctuation.separator.decimal.2hl
+        2: punctuation.separator.decimal.2hl
+    - match: (?i){{digitpart}}(\.) # mandatory digitpart
+      scope: constant.numeric.float.2hl
+      captures:
+        1: punctuation.separator.decimal.2hl
+    # integer
+    - match: \b(?i)(?:[1-9]\d*|0)(L)\b # py2
+      scope: constant.numeric.integer.long.decimal.2hl
+      captures:
+        1: storage.type.numeric.long.2hl
+    - match: \b(?i)([1-9][\d_]*|0)\b
+      scope: constant.numeric.integer.decimal.2hl
+
+  modifiers:
+    - match: \b(?:(global)|(nonlocal))\b
+      captures:
+        1: storage.modifier.global.2hl
+        2: storage.modifier.nonlocal.2hl
+      push:
+        - include: line-continuation-or-pop
+        - match: ','
+          scope: punctuation.separator.storage-list.2hl
+        - include: name
+        - match: \S+
+          scope: invalid.illegal.name.storage.2hl
+
+  yields:
+    - match: \b(yield)(?:\s+(from))?\b
+      captures:
+        1: keyword.control.flow.yield.2hl
+        2: keyword.control.flow.yield-from.2hl
+
+  assignments:
+    - match: \+=|-=|\*=|/=|//=|%=|@=|&=|\|=|\^=|>>=|<<=|\*\*=
+      scope: keyword.operator.assignment.augmented.2hl
+    - match: '=(?!=)'
+      scope: keyword.operator.assignment.2hl
+
+  operators:
+    - match: <>
+      scope: invalid.deprecated.operator.2hl
+    - match: <\=|>\=|\=\=|<|>|\!\=
+      scope: keyword.operator.comparison.2hl
+    - match: \+|\-|\*|\*\*|/|//|%|<<|>>|&|\||\^|~
+      scope: keyword.operator.arithmetic.2hl
+    - match: \b(and|in|is|not|or)\b
+      comment: keyword operators that evaluate to True or False
+      scope: keyword.operator.logical.2hl
+    - match: '@'
+      scope: keyword.operator.matrix.2hl
+
+  allow-unpack-operators:
+    # Match unpacking operators, if present
+    - include: comments
+    - match: \*{3,}
+      scope: invalid.illegal.syntax.2hl
+      pop: true
+    - match: \*\*
+      scope: keyword.operator.unpacking.mapping.2hl
+      pop: true
+    - match: \*
+      scope: keyword.operator.unpacking.sequence.2hl
+      pop: true
+    - match: (?=\S)
+      pop: true
+
+  classes:
+    - match: '^\s*(class)\b'
+      captures:
+        1: storage.type.class.2hl
+      push:
+        - meta_scope: meta.class.2hl
+        - include: line-continuation-or-pop
+        - match: ':'
+          scope: punctuation.section.class.begin.2hl
+          pop: true
+        - match: "(?={{identifier}})"
+          push:
+            - meta_content_scope: entity.name.class.2hl
+            - include: entity-name-class
+            - match: ''
+              pop: true
+        - match: \(
+          scope: punctuation.section.inheritance.begin.2hl
+          set:
+            - meta_scope: meta.class.inheritance.2hl
+            - match: \)
+              scope: punctuation.section.inheritance.end.2hl
+              set:
+                - include: line-continuation-or-pop
+                - match: ':'
+                  scope: meta.class.2hl punctuation.section.class.begin.2hl
+                  pop: true
+                - match: (?=\S)
+                  pop: true
+            - match: ':'
+              scope: invalid.illegal.no-closing-parens.2hl
+              pop: true
+            - match: ','
+              scope: punctuation.separator.inheritance.2hl
+            - include: illegal-names-pop
+            - match: ({{identifier}}) *(=)
+              captures:
+                1: variable.parameter.class-inheritance.2hl
+                2: keyword.operator.assignment.2hl
+            - match: (?={{path}})
+              push:
+                - meta_scope: entity.other.inherited-class.2hl
+                - match: '{{identifier}}(?: *(\.) *)?'
+                  captures:
+                    1: punctuation.accessor.dot.2hl
+                - match: ''
+                  pop: true
+            - include: expressions
+
+  functions:
+    - match: '^\s*(?:(async)\s+)?(def)\b'
+      captures:
+        1: storage.modifier.async.2hl
+        2: storage.type.function.2hl
+      push:
+        - meta_scope: meta.function.2hl
+        - include: line-continuation-or-pop
+        - match: ':'
+          scope: punctuation.section.function.begin.2hl
+          pop: true
+        - match: "(?={{identifier}})"
+          push:
+            - meta_content_scope: entity.name.function.2hl
+            - include: entity-name-function
+            - match: ''
+              pop: true
+        - match: '(?=\()'
+          set:
+            - match: \(
+              scope: meta.function.parameters.2hl punctuation.section.parameters.begin.2hl
+              set: [function-parameters, allow-unpack-operators]
+
+  function-parameters:
+    - meta_content_scope: meta.function.parameters.2hl
+    - match: \)
+      scope: punctuation.section.parameters.end.2hl
+      set: function-after-parameters
+    - include: comments
+    - match: ','
+      scope: punctuation.separator.parameters.2hl
+      push: allow-unpack-operators
+    - match: '(?==)'
+      set:
+        - match: '='
+          scope: keyword.operator.assignment.2hl
+          set:
+            - meta_scope: meta.function.parameters.default-value.2hl
+            - match: '(?=[,)])'
+              set: [function-parameters, allow-unpack-operators]
+            - include: expressions
+    - match: '(?=:)'
+      set:
+        - match: ':'
+          scope: punctuation.separator.annotation.parameter.2hl
+          set:
+            - meta_scope: meta.function.parameters.annotation.2hl
+            - match: '(?=[,)=])'
+              set: function-parameters
+            - include: expressions
+    - include: function-parameters-tuple
+    - include: illegal-names
+    - match: '{{identifier}}'
+      scope: variable.parameter.2hl
+    - include: line-continuation
+
+  function-parameters-tuple:
+    # python 2 style tuple arguments
+    # removed from python 3 since PEP-3113
+    - match: \(
+      scope: punctuation.section.group.begin.2hl
+      push:
+        - meta_scope: meta.group.2hl
+        - match: \)
+          scope: punctuation.section.group.end.2hl
+          set: after-expression
+        - include: comments
+        - match: ','
+          scope: punctuation.separator.parameters.2hl
+          push: allow-unpack-operators
+        # default values should follow the argument
+        - match: '='
+          push:
+            - meta_scope: invalid.illegal.default-value.2hl
+            - match: '(?=[,)=])'
+              pop: true
+        # python 2 does not support type annotations
+        - match: '(?=:)'
+          push:
+            - meta_scope: invalid.illegal.annotation.2hl
+            - match: '(?=[,)=])'
+              pop: true
+        - include: illegal-names
+        - match: '{{identifier}}'
+          scope: variable.parameter.2hl
+        - include: line-continuation
+
+  function-after-parameters:
+    - meta_content_scope: meta.function.2hl
+    - match: '(?=->)'
+      set:
+        - meta_content_scope: meta.function.annotation.return.2hl
+        - match: ->
+          scope: punctuation.separator.annotation.return.2hl
+        - match: '(?=:)'
+          set: function-after-parameters
+        - include: line-continuation-or-pop
+        - include: expressions
+    - match: ':'
+      scope: meta.function.2hl punctuation.section.function.begin.2hl
+      pop: true
+    - include: comments
+    - match: (?=\S)
+      pop: true
+
+  decorators:
+    - match: ^\s*(?=@)
+      push:
+        # Due to line continuations, we don't know whether this is a "function call" yet
+        - meta_content_scope: meta.annotation.2hl
+        - match: '@'
+          scope: punctuation.definition.annotation.2hl
+        - match: $
+          pop: true
+        - include: line-continuation-or-pop
+        - match: (?=\.?\s*{{path}}\s*\() # now we do
+          set: [decorator-function-call-wrapper, qualified-name-until-leaf]
+        - match: (?=\.?\s*{{path}})
+          push: [decorator-wrapper, qualified-name-until-leaf]
+        - match: \S
+          scope: invalid.illegal.character.2hl
+          pop: true
+
+  decorator-wrapper:
+    - match: (\.)\s*
+      captures:
+        1: punctuation.accessor.dot.2hl
+      set:
+        - meta_scope: meta.qualified-name.2hl
+        - meta_content_scope: variable.annotation.2hl
+        - include: dotted-name-specials
+        - include: generic-names
+        - match: ''
+          pop: true
+    - match: ''
+      set:
+        - meta_scope: meta.qualified-name.2hl variable.annotation.2hl
+        - include: name-specials
+        - include: generic-names
+        - match: ''
+          pop: true
+
+  decorator-function-call-wrapper:
+    - meta_scope: meta.annotation.function.2hl
+    - match: \)
+      scope: punctuation.section.arguments.end.2hl
+      set: after-expression
+    - match: \(
+      scope: meta.annotation.function.2hl punctuation.section.arguments.begin.2hl
+      push:
+        - clear_scopes: 1
+        - meta_content_scope: meta.annotation.arguments.2hl
+        - match: (?=\))
+          pop: true
+        - include: arguments
+    - match: (\.)\s*
+      captures:
+        1: punctuation.accessor.dot.2hl
+      push:
+        - meta_scope: meta.qualified-name.2hl
+        - meta_content_scope: variable.annotation.function.2hl
+        - include: dotted-name-specials
+        - include: generic-names
+        - match: ''
+          pop: true
+    - match: ''
+      push:
+        - meta_scope: meta.qualified-name.2hl variable.annotation.function.2hl
+        - include: name-specials
+        - include: generic-names
+        - match: ''
+          pop: true
+
+  item-access:
+    - match: '(?={{path}}\s*\[)'
+      push:
+        - match: \]
+          scope: meta.item-access.2hl punctuation.section.brackets.end.2hl
+          set: after-expression
+        - match: '(?={{path}}\s*\[)'
+          push:
+            - meta_content_scope: meta.item-access.2hl
+            - match: '(?=\s*\[)'
+              pop: true
+            - include: qualified-name
+        - match: \[
+          scope: meta.item-access.2hl punctuation.section.brackets.begin.2hl
+          push:
+            - meta_content_scope: meta.item-access.arguments.2hl
+            - match: '(?=\])'
+              pop: true
+            - match: ':'
+              scope: punctuation.separator.slice.2hl
+            - include: expressions
+
+  function-calls:
+    - match: '(?=(\.\s*)?{{path}}\s*\()'
+      push: [function-call-wrapper, qualified-name-until-leaf]
+
+  function-call-wrapper:
+    - meta_scope: meta.function-call.2hl
+    - match: (?=\()  # need to remove meta.function-call.2hl from opening parens
+      set:
+        - match: \(
+          scope: punctuation.section.arguments.begin.2hl
+          set:
+            - meta_scope: meta.function-call.arguments.2hl
+            - match: \)
+              scope: punctuation.section.arguments.end.2hl
+              set: after-expression
+            - include: arguments
+    - match: (\.)\s*(?={{identifier}})
+      captures:
+        1: punctuation.accessor.dot.2hl
+      push:
+        - meta_scope: meta.qualified-name.2hl
+        - meta_content_scope: variable.function.2hl
+        - include: dotted-name-specials
+        - include: generic-names
+        - match: ''
+          pop: true
+    - match: (?={{identifier}})
+      push:
+        - meta_scope: meta.qualified-name.2hl variable.function.2hl
+        - include: name-specials
+        - include: generic-names
+        - match: ''
+          pop: true
+
+  arguments:
+    - include: keyword-arguments
+    - match: ','
+      scope: punctuation.separator.arguments.2hl
+      push: allow-unpack-operators
+    - include: inline-for
+    - include: expressions
+
+  keyword-arguments:
+    - match: '(?={{identifier}}\s*=(?!=))'
+      push:
+        - include: line-continuation-or-pop
+        - match: '='
+          scope: keyword.operator.assignment.2hl
+          set:
+            - match: (?=\s*[,):])
+              pop: true
+            - include: expressions
+        - include: illegal-names
+        - match: '{{identifier}}'
+          scope: variable.parameter.2hl
+
+  lambda:
+    - match: \b(lambda)(?=\s|:|$)
+      scope: storage.type.function.inline.2hl
+      push: [lambda-parameters, allow-unpack-operators]
+
+  lambda-parameters:
+    - meta_scope: meta.function.inline.2hl
+    - meta_content_scope: meta.function.inline.parameters.2hl
+    - include: line-continuation-or-pop
+    - match: '\:'
+      scope: punctuation.section.function.begin.2hl
+      pop: true
+    - match: ','
+      scope: punctuation.separator.parameters.2hl
+      push: allow-unpack-operators
+    - include: keyword-arguments
+    - include: function-parameters-tuple
+    - include: illegal-names
+    - match: '{{identifier}}'
+      scope: variable.parameter.2hl
+    - match: '\S'
+      scope: invalid.illegal.expected-parameter.2hl
+
+  groups:
+    - match: \(
+      scope: punctuation.section.group.begin.2hl
+      push:
+        - meta_scope: meta.group.2hl
+        - match: \)
+          scope: punctuation.section.group.end.2hl
+          set: after-expression
+        - match: ','
+          scope: punctuation.separator.tuple.2hl
+        - include: inline-for
+        - include: expressions
+
+  tuples:
+    # We don't know for certain, whether a parenthesized expression is a tuple,
+    # so try looking ahead.
+    - match: (\()\s*(\))
+      scope: meta.sequence.tuple.empty.2hl
+      captures:
+        1: punctuation.section.sequence.begin.2hl
+        2: punctuation.section.sequence.end.2hl
+      push: after-expression
+    - match: \((?={{simple_expression}},|\s*\*{{path}})
+      scope: punctuation.section.sequence.begin.2hl
+      push: inside-tuple
+    # TODO generator
+    # - match: \((?:{{simple_expression}}for)
+
+  inside-tuple:
+    - meta_scope: meta.sequence.tuple.2hl
+    - match: \)
+      scope: punctuation.section.sequence.end.2hl
+      set: after-expression
+    - match: ','
+      scope: punctuation.separator.sequence.2hl
+      push: allow-unpack-operators
+    - include: inline-for
+    - include: expressions
+
+  lists:
+    - match: (\[)\s*(\])
+      scope: meta.sequence.list.empty.2hl
+      captures:
+        1: punctuation.section.sequence.begin.2hl
+        2: punctuation.section.sequence.end.2hl
+      push: after-expression
+    - match: \[
+      scope: punctuation.section.sequence.begin.2hl
+      push: [inside-list, allow-unpack-operators]
+
+  inside-list:
+    - meta_scope: meta.sequence.list.2hl
+    - match: \]
+      scope: punctuation.section.sequence.end.2hl
+      set: after-expression
+    - match: ','
+      scope: punctuation.separator.sequence.2hl
+      push: allow-unpack-operators
+    - include: inline-for
+    - include: expressions
+
+  dictionaries-and-sets:
+    # Dictionaries and set literals use the same punctuation,
+    # so we try looking ahead to determine whether we have a dict or a set.
+    - match: '(\{)\s*(\})'
+      scope: meta.mapping.empty.2hl
+      captures:
+        1: punctuation.section.mapping.begin.2hl
+        2: punctuation.section.mapping.end.2hl
+      push: after-expression
+    - match: \{(?={{simple_expression}}:|\s*\*\*{{path}})
+      scope: punctuation.section.mapping.begin.2hl
+      push: inside-dictionary
+    - match: \{(?={{simple_expression}}[,}]|\s*\*{{path}})
+      scope: punctuation.section.set.begin.2hl
+      push: inside-set
+    # If the expression is "more complex" or on the next line,
+    # fall back to default and determine later.
+    - match: \{
+      scope: punctuation.section.mapping-or-set.begin.2hl
+      push:
+        - meta_scope: meta.mapping-or-set.2hl
+        - match: \}
+          scope: punctuation.section.mapping-or-set.end.2hl
+          set: after-expression
+        - match: (?={{simple_expression}}:|\s*\*\*{{path}})
+          set: inside-dictionary
+        - match: (?={{simple_expression}}[,}]|\s*\*{{path}})
+          set: inside-set
+        - match: ','
+          scope: punctuation.separator.set.2hl
+          set: inside-set
+        - match: ':'
+          scope: punctuation.separator.mapping.key-value.2hl
+          set: inside-directory-value
+        - include: inline-for
+        - include: expressions
+
+  inside-dictionary:
+    - meta_scope: meta.mapping.2hl
+    - match: \}
+      scope: punctuation.section.mapping.end.2hl
+      set: after-expression
+    - match: ':'
+      scope: punctuation.separator.mapping.key-value.2hl
+      set: inside-directory-value
+    - match: ','
+      scope: invalid.illegal.expected-colon.2hl
+    - match: \*\*
+      scope: keyword.operator.unpacking.mapping.2hl
+      push:
+        - match: (?=\})
+          pop: true
+        - match: ','
+          scope: punctuation.separator.mapping.2hl
+          pop: true
+        - include: expressions
+    - include: comments
+    - match: (?=\S)
+      push:
+        - clear_scopes: 1
+        - meta_scope: meta.mapping.key.2hl
+        - match: \s*(?=\}|,|:)
+          pop: true
+        - include: expressions
+
+  inside-directory-value:
+    - meta_content_scope: meta.mapping.2hl
+    - match: \}
+      scope: punctuation.section.mapping.end.2hl
+      set: after-expression
+    - match: (?=,)
+      set:
+        # clear meta scope from this match, because 'inside-directory' has it in meta_scope
+        - match: ','
+          scope: punctuation.separator.mapping.2hl
+          set: inside-dictionary
+    - match: (?=for\b)
+      push:
+        - match: (?=\})
+          pop: true
+        - match: ','
+          scope: invalid.illegal.unexpected-comma.2hl
+        - include: inline-for
+        - include: expressions
+    - include: comments
+    - match: (?=\S)
+      push:
+        - clear_scopes: 1
+        - meta_content_scope: meta.mapping.value.2hl
+        - match: (?=\s*(\}|,|for\b))
+          pop: true
+        - include: expressions
+
+  inside-set:
+    - meta_scope: meta.set.2hl
+    - match: \}
+      scope: punctuation.section.set.end.2hl
+      set: after-expression
+    - match: ':'
+      scope: invalid.illegal.colon-inside-set.2hl
+    - match: ','
+      scope: punctuation.separator.set.2hl
+    - match: \*
+      scope: keyword.operator.unpacking.sequence.2hl
+      push:
+        - match: (?=\})
+          pop: true
+        - match: ','
+          scope: punctuation.separator.set.2hl
+          pop: true
+        - include: expressions
+    - include: inline-for
+    - include: expressions
+
+  builtin-exceptions:
+    - match: |-
+        (?x)\b(
+          (
+            Arithmetic|Assertion|Attribute|BlockingIO|BrokenPipe|Buffer|ChildProcess|
+            Connection(Aborted|Refused|Reset)?|EOF|Environment|FileExists|
+            FileNotFound|FloatingPoint|Interrupted|IO|IsADirectoryError|
+            Import|Indentation|Index|Key|Lookup|Memory|Name|NotADirectory|
+            NotImplemented|OS|Overflow|Permission|ProcessLookup|Reference|
+            Runtime|Standard|Syntax|System|Tab|Timeout|Type|UnboundLocal|
+            Unicode(Encode|Decode|Translate)?|Value|VMS|Windows|ZeroDivision
+          )Error|
+          ((Pending)?Deprecation|Runtime|Syntax|User|Future|Import|Unicode|Bytes)?Warning|
+          (Base)?Exception|
+          SystemExit|StopIteration|NotImplemented|KeyboardInterrupt|GeneratorExit
+        )\b
+      scope: support.type.exception.2hl
+
+  builtin-functions:
+    - match: |-
+        (?x)\b(
+          __import__|all|abs|any|apply|ascii|bin|breakpoint|callable|chr|classmethod|cmp|coerce|
+          compile|delattr|dir|divmod|enumerate|eval|exec|execfile|filter|format|getattr|
+          globals|hasattr|hash|help|hex|id|input|intern|isinstance|issubclass|iter|
+          len|locals|map|max|min|next|oct|open|ord|pow|print|property|range|
+          raw_input|reduce|reload|repr|reversed|round|setattr|sorted|staticmethod|
+          sum|super|type|unichr|vars|zip
+        )\b
+      scope: support.function.builtin.2hl
+
+  builtin-types:
+    - match: |-
+        (?x)\b(
+          basestring|bool|buffer|bytearray|bytes|complex|dict|float|frozenset|int|
+          list|long|memoryview|object|range|set|slice|str|tuple|unicode|xrange
+        )\b
+      scope: support.type.2hl
+
+  name:
+    - match: '(?={{identifier}})'
+      push:
+        - include: name-specials
+        - match: '{{identifier_constant}}'
+          scope: variable.other.constant.2hl
+        - include: generic-names
+        - match: ''
+          pop: true
+
+  dotted-name:
+    - match: '\s*(\.)\s*(?={{identifier}})'
+      captures:
+        1: punctuation.accessor.dot.2hl
+      push:
+        - include: dotted-name-specials
+        - match: '{{identifier_constant}}'
+          scope: variable.other.constant.2hl
+        - include: generic-names
+        - match: ''
+          pop: true
+
+  qualified-name:
+    - match: '(?={{path}})'
+      push:
+        - meta_scope: meta.qualified-name.2hl
+        - include: name
+        - include: dotted-name
+        - match: ''
+          pop: true
+
+  qualified-name-until-leaf:
+    # Push this together with another context to match a qualified name
+    # until the last non-special identifier (if any).
+    # This allows the leaf to be scoped individually.
+    - meta_scope: meta.qualified-name.2hl
+    # If a line continuation follows, this may or may not be the last leaf (most likley not though)
+    - match: (?={{identifier}}\s*(\.|\\))
+      push:
+        - include: name-specials
+        - include: generic-names
+        - match: ''
+          pop: true
+    - match: (\.)\s*(?={{identifier}}\s*(\.|\\))
+      captures:
+        1: punctuation.accessor.dot.2hl
+      push:
+        - include: dotted-name-specials
+        - include: generic-names
+        - match: ''
+          pop: true
+    - match: \.(?!\s*{{identifier}})  # don't match last dot
+      scope: punctuation.accessor.dot.2hl
+    - match: (?=\S|$)
+      pop: true
+
+  name-specials:
+    - include: builtin-functions
+    - include: builtin-types
+    - include: builtin-exceptions
+    - include: illegal-names
+    - include: magic-function-names
+    - include: magic-variable-names
+    - include: language-variables
+
+  dotted-name-specials:
+    - include: magic-function-names
+    - include: magic-variable-names
+    - include: illegal-names
+
+  entity-name-class:
+    - include: illegal-names
+    - include: generic-names
+
+  entity-name-function:
+    - include: magic-function-names
+    - include: illegal-names
+    - include: generic-names
+
+  generic-names:
+    - match: '{{identifier}}'
+      scope: meta.generic-name.2hl
+
+  illegal-names:
+    - match: \b{{illegal_names}}\b
+      scope: invalid.illegal.name.2hl
+
+  illegal-names-pop:
+    - match: \b{{illegal_names}}\b
+      scope: invalid.illegal.name.2hl
+      pop: true
+
+  language-variables:
+    - match: \b(self|cls)\b
+      scope: variable.language.2hl
+    - match: _(?!{{identifier_continue}})
+      scope: variable.language.2hl
+
+  line-continuation:
+    - match: (\\)(.*)$\n?
+      captures:
+        1: punctuation.separator.continuation.line.2hl
+        2: invalid.illegal.unexpected-text.2hl
+    # make sure to resume parsing at next line
+      push:
+        # This prevents strings after a continuation from being a docstring
+        - include: strings
+        - match: (?=\S|^\s*$|\n)  # '\n' for when we matched a string earlier
+          pop: true
+
+  line-continuation-or-pop:
+    - include: line-continuation
+    - match: (?=\s*($|;|#))
+      pop: true
+
+  magic-function-names:
+    # https://docs.python.org/2/reference/datamodel.html
+    # https://docs.python.org/3/reference/datamodel.html
+    - match: |-
+        (?x)\b__(?:
+          # unary operators
+          invert|neg|pos|abs|
+          # binary operators
+          add|and|div|divmod|floordiv|lshift|mod|mul|or|pow|rshift|sub|truediv|xor|
+          contains|
+          # right-hand binary operators
+          radd|rand|rdiv|rdivmod|rfloordiv|rlshift|rmod|rmul|ror|rpow|rrshift|rsub|rtruediv|rxor|
+          # in-place operator assignments
+          iadd|iand|idiv|ifloordiv|ilshift|imod|imul|ior|ipow|irshift|isub|itruediv|ixor|
+          # comparisons
+          eq|ge|gt|le|lt|ne|
+          cmp|rcmp| # py2
+          # primary coercion
+          bool|str|
+          nonzero|unicode| # py2
+          # number coercion (converts something to a number)
+          bytes|complex|float|index|int|round|
+          long| # py2
+          # other "coercion"
+          format|len|length_hint|hash|repr|reversed|
+          coerce|hex|oct| # py2
+          fspath|
+          # iterator (and 'await')
+          iter|next|
+          aiter|anext|
+          await|
+          # attribute and item access
+          delattr|delitem|delslice|
+          getattr|getattribute|getitem|getslice|
+          setattr|setitem|setslice|
+          dir|missing|
+          # context manager
+          enter|exit|
+          aenter|aexit|
+          # other class magic
+          call|del|init|new|init_subclass|
+          instancecheck|subclasscheck|
+          # pickling
+          getnewargs|getnewargs_ex|getstate|setstate|reduce|reduce_ex|
+          # descriptors
+          delete|get|set|set_name|
+          # class-specific
+          subclasses|
+          # dataclasses (PEP 557)
+          post_init|
+          # for typing core support (PEP 560)
+          class_getitem|mro_entries
+        )__\b
+      comment: these methods have magic interpretation by python and are generally called indirectly through syntactic constructs
+      scope: support.function.magic.2hl
+
+  magic-variable-names:
+    # magic variables which a class/module/object may have.
+    # https://docs.python.org/3/library/inspect.html#types-and-members
+    # https://docs.python.org/3/reference/datamodel.html#object.__slots__
+    # https://docs.python.org/3/reference/datamodel.html#preparing-the-class-namespace
+    - match: |-
+        (?x)\b__(?:
+          # generic object
+          class|dict|doc|module|name|
+          # module-specific / global
+          all|file|package|
+          # functions & methods
+          annotations|closure|code|defaults|func|globals|kwdefaults|self|qualname|
+          # classes (attributes)
+          bases|prepare|slots|metaclass|mro|
+          # Python 2
+          members|methods
+        )__\b
+      scope: support.variable.magic.2hl
+
+  docstrings:
+    - match: ^\s*(?=(?i)(ur|ru|u|r)?("""|'''))
+      push:
+      - match: (?i)(u)?("""|''')
+        captures:
+          1: storage.type.string.2hl
+          2: punctuation.definition.comment.begin.2hl
+        set:
+          - meta_scope: comment.block.documentation.2hl
+          - include: escaped-unicode-char
+          - include: escaped-char
+          - match: '\2'
+            scope: punctuation.definition.comment.end.2hl
+            pop: true
+      - match: (?i)(u?ru?)("""|''')
+        captures:
+          1: storage.type.string.2hl
+          2: punctuation.definition.comment.begin.2hl
+        set:
+          - meta_scope: comment.block.documentation.2hl
+          - match: '\2'
+            scope: punctuation.definition.comment.end.2hl
+            pop: true
+
+  escaped-char:
+    - match: '(\\x\h{2})|(\\[0-7]{1,3})|(\\[\\"''abfnrtv])'
+      captures:
+        1: constant.character.escape.hex.2hl
+        2: constant.character.escape.octal.2hl
+        3: constant.character.escape.2hl
+    - match: \\.  # deprecated in 3.6 and will eventually be a syntax error
+      scope: invalid.deprecated.character.escape.2hl
+
+  escaped-unicode-char:
+    - match: '(\\U\h{8})|(\\u\h{4})|(\\N\{[a-zA-Z ]+\})'
+      captures:
+        1: constant.character.escape.unicode.16-bit-hex.2hl
+        2: constant.character.escape.unicode.32-bit-hex.2hl
+        3: constant.character.escape.unicode.name.2hl
+
+  line-continuation-inside-string:
+    - match: (\\)$\n?
+      captures:
+        1: punctuation.separator.continuation.line.2hl
+    - match: \n
+      scope: invalid.illegal.unclosed-string.2hl
+      set: after-expression
+
+  constant-placeholder:
+    - match: |- # printf style
+        (?x)
+        %
+          ( \( ({{identifier}}) \) )? # mapping key
+          \#?            # alternate form
+          0?             # pad with zeros
+          \-?            # left-adjust
+          \ ?            # implicit sign
+          [+-]?          # sign
+          (\d*|\*)       # width
+          (\. (\d*|\*))? # precision
+          [hlL]?         # length modifier (but ignored)
+          [acdeEfFgGiorsuxX%]
+      scope: constant.other.placeholder.2hl
+      captures:
+        2: variable.other.placeholder.2hl
+    - match: '{{strftime_spec}}'
+      scope: constant.other.placeholder.2hl
+    - match: '\{\{|\}\}'
+      scope: constant.character.escape.2hl
+    - include: formatting-syntax
+
+  formatting-syntax:
+    # https://docs.python.org/3.6/library/string.html#formatstrings
+    - match: |- # simple form
+        (?x)
+        (\{)
+          (?: [\w.\[\]]+)?             # field_name
+          (   \s*\=\s*)?                # self-documentation
+          (   ! [ars])?                # conversion
+          (   : (?:{{format_spec}}|    # format_spec OR
+                   [^}%]*%.[^}]*)      # any format-like string
+          )?
+        (\})
+      scope: constant.other.placeholder.2hl
+      captures:
+        1: punctuation.definition.placeholder.begin.2hl
+        2: constant.other.fstring-self-doc.2hl
+        3: storage.modifier.conversion.2hl
+        4: constant.other.format-spec.2hl
+        5: punctuation.definition.placeholder.end.2hl
+    - match: \{(?=[^\}"']+\{[^"']*\}) # complex (nested) form
+      scope: punctuation.definition.placeholder.begin.2hl
+      push:
+        - meta_scope: constant.other.placeholder.2hl
+        - match: \}
+          scope: punctuation.definition.placeholder.end.2hl
+          pop: true
+        - match: '[\w.\[\]]+'
+        - match: '![ars]'
+          scope: storage.modifier.conversion.2hl
+        - match: ':'
+          push:
+            - meta_scope: meta.format-spec.2hl constant.other.format-spec.2hl
+            - match: (?=\})
+              pop: true
+            - include: formatting-syntax
+
+  f-string-content:
+    # https://www.python.org/dev/peps/pep-0498/
+    # https://docs.python.org/3.6/reference/lexical_analysis.html#f-strings
+    - match: \{\{|\}\}
+      scope: constant.character.escape.2hl
+    - match: '\s*=\s*'
+      scope: constant.other.self-doc.2hl
+    - match: \{\s*\}
+      scope: invalid.illegal.empty-expression.2hl
+    - match: (?=\{)
+      push: f-string-replacement
+    - match: \}
+      scope: invalid.illegal.stray-brace.2hl
+
+  f-string-content-reset:
+    # Same as f-string-content, but will reset the entire scope stack
+    - match: \{\{|\}\}
+      scope: constant.character.escape.2hl
+    - match: '\s*=\s*'
+      scope: constant.other.self-doc.2hl
+    - match: \{\s*\}
+      scope: invalid.illegal.empty-expression.2hl
+    - match: (?=\{)
+      push: f-string-replacement-reset
+    - match: \}
+      scope: invalid.illegal.stray-brace.2hl
+
+  f-string-replacement:
+    - clear_scopes: 1
+    - match: \}
+      scope: meta.interpolation.2hl punctuation.section.interpolation.end.2hl
+      pop: true
+    - match: \{
+      scope: punctuation.section.interpolation.begin.2hl
+      push:
+        - meta_scope: meta.interpolation.2hl
+        - match: (?=\})
+          pop: true
+        - match: '\s*=\s*'
+          scope: constant.other.self-doc.2hl
+        - match: '![ars]'
+          scope: storage.modifier.conversion.2hl
+        - match: ':'
+          push:
+            - meta_scope: meta.format-spec.2hl constant.other.format-spec.2hl
+            # Because replacements can also be used *within* the format-spec,
+            # basically any character is valid and matching {{format_spec}} is useless.
+            # - match: '{{format_spec}}'
+            - match: (?=\})
+              pop: true
+            - include: f-string-content
+        - match: ''
+          push:
+            - meta_content_scope: source.python.embedded
+            - match: (?=![^=]|:|\})
+              pop: true
+            - match: \\
+              scope: invalid.illegal.backslash-in-fstring.2hl
+            - include: inline-for
+            - include: expressions
+
+  f-string-replacement-reset:
+    # Same as f-string-replacement, but with clear_scopes: true
+    - clear_scopes: true
+    - meta_scope: source.2hl meta.string.interpolated.2hl
+    - match: \}
+      scope: meta.interpolation.2hl punctuation.section.interpolation.end.2hl
+      pop: true
+    - match: \{
+      scope: punctuation.section.interpolation.begin.2hl
+      push:
+        - meta_scope: meta.interpolation.2hl
+        - match: (?=\})
+          pop: true
+        - match: '![ars]'
+          scope: storage.modifier.conversion.2hl
+        - match: ':'
+          push:
+            - meta_scope: meta.format-spec.2hl constant.other.format-spec.2hl
+            - match: (?=\})
+              pop: true
+            - include: f-string-content
+        - match: ''
+          push:
+            - meta_content_scope: source.python.embedded
+            - match: (?=![^=]|:|\})
+              pop: true
+            - match: \\
+              scope: invalid.illegal.backslash-in-fstring.2hl
+            - include: inline-for
+            - include: expressions
+
+  string-quoted-double-block:
+    # Triple-quoted capital R raw string, unicode or not, no syntax embedding
+    - match: '([uU]?R)(""")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.block.2hl
+        - match: '"""'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-unicode-char
+    # Triple-quoted capital R raw string, bytes, no syntax embedding
+    - match: '([bB]R|R[bB])(""")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.block.2hl
+        - match: '"""'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+    # Triple-quoted raw string, unicode or not, will detect SQL, otherwise regex
+    - match: '([uU]?r)(""")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.block.2hl
+        - match: '(?={{sql_indicator}})'
+          set:
+            - meta_scope: meta.string.2hl string.quoted.double.block.2hl
+            - match: '"""'
+              scope: punctuation.definition.string.end.2hl
+              set: after-expression
+            - match: ''
+              push: scope:source.sql
+              with_prototype:
+                - match: '(?=""")'
+                  pop: true
+                - include: escaped-unicode-char
+                - include: constant-placeholder
+        - match: '(?=\S)'
+          set:
+            - meta_scope: meta.string.2hl string.quoted.double.block.2hl
+            - match: '"""'
+              scope: punctuation.definition.string.end.2hl
+              set: after-expression
+            - match: ''
+              push: scope:source.regexp.2hl
+              with_prototype:
+                - match: '(?=""")'
+                  pop: true
+                - include: escaped-unicode-char
+    # Triple-quoted raw string, bytes, will use regex
+    - match: '([bB]r|r[bB])(""")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.block.2hl
+        - match: '"""'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - match: ''
+          embed: scope:source.regexp.2hl
+          escape: (?=""")
+    # Triple-quoted raw f-string
+    - match: ([fF]R|R[fF])(""")
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.double.block.2hl
+        - match: '"""'
+          scope: punctuation.definition.string.begin.2hl
+          set: after-expression
+        - include: f-string-content
+    # Triple-quoted raw f-string, treated as regex
+    - match: ([fF]r|r[fF])(""")
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.double.block.2hl
+        - match: '"""'
+          scope: punctuation.definition.string.begin.2hl
+          set: after-expression
+        - match: ''
+          push: scope:source.regexp.2hl
+          with_prototype:
+            - match: '(?=""")'
+              pop: true
+            - include: line-continuation-inside-string
+            - include: f-string-content-reset
+    # Triple-quoted f-string
+    - match: ((?i)f|f)(""")
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.double.block.2hl
+        - match: '"""'
+          scope: punctuation.definition.string.begin.2hl
+          set: after-expression
+        - include: escaped-unicode-char
+        - include: escaped-char
+        - include: f-string-content
+    # Triple-quoted string, unicode or not, will detect SQL
+    - match: '([uU]?)(""")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.block.2hl
+        - match: '(?={{sql_indicator}})'
+          set:
+            - meta_scope: meta.string.2hl string.quoted.double.block.2hl
+            - match: '"""'
+              scope: punctuation.definition.string.end.2hl
+              set: after-expression
+            - match: ''
+              push: scope:source.sql
+              with_prototype:
+                - match: '(?=""")'
+                  pop: true
+                - include: escaped-unicode-char
+                - include: escaped-char
+                - include: constant-placeholder
+        - match: '(?=\S)'
+          set:
+            - meta_scope: meta.string.2hl string.quoted.double.block.2hl
+            - match: '"""'
+              scope: punctuation.definition.string.end.2hl
+              set: after-expression
+            - include: escaped-unicode-char
+            - include: escaped-char
+            - include: constant-placeholder
+    # Triple-quoted string, bytes, no syntax embedding
+    - match: '([bB])(""")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.block.2hl
+        - match: '"""'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-char
+        - include: constant-placeholder
+
+  string-quoted-double:
+    # Single-line capital R raw string, unicode or not, no syntax embedding
+    - match: '([uU]?R)(")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+    # Single-line capital R raw string, bytes, no syntax embedding
+    - match: '([bB]R|R[bB])(")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+    # Single-line raw string, unicode or not, starting with a SQL keyword
+    - match: '([uU]?r)(")(?={{sql_indicator}})'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.sql
+          with_prototype:
+            - match: '(?="|\n)'
+              pop: true
+            - include: constant-placeholder
+            - include: line-continuation-inside-string
+    # Single-line raw string, unicode or not, treated as regex
+    - match: '([uU]?r)(")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.regexp.2hl
+          with_prototype:
+            - match: '(?="|\n)'
+              pop: true
+            - include: line-continuation-inside-string
+    # Single-line raw string, bytes, treated as regex
+    - match: '([bB]r|r[bB])(")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          embed: scope:source.regexp.2hl
+          escape: (?="|\n)
+    # Single-line raw f-string
+    - match: (R[fF]|[fF]R)(")
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - include: f-string-content
+    # Single-line raw f-string, treated as regex
+    - match: (r[fF]|[fF]r)(")
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.regexp.2hl
+          with_prototype:
+            - match: '(?="|\n)'
+              pop: true
+            - include: line-continuation-inside-string
+            - include: f-string-content-reset
+    # Single-line f-string
+    - match: ((?i)f|f)(")
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-unicode-char
+        - include: escaped-char
+        - include: line-continuation-inside-string
+        - include: f-string-content
+    # Single-line string, unicode or not, starting with a SQL keyword
+    - match: '([uU]?)(")(?={{sql_indicator}})'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.sql
+          with_prototype:
+            - match: '(?="|\n)'
+              pop: true
+            - include: escaped-unicode-char
+            - include: escaped-char
+            - include: line-continuation-inside-string
+            - include: constant-placeholder
+    # Single-line string, unicode or not
+    - match: '([uU]?)(")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-unicode-char
+        - include: escaped-char
+        - include: line-continuation-inside-string
+        - include: constant-placeholder
+    # Single-line string, bytes
+    - match: '([bB])(")'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.double.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.double.2hl
+        - match: '"'
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-char
+        - include: line-continuation-inside-string
+        - include: constant-placeholder
+
+  string-quoted-single-block:
+    # Triple-quoted capital R raw string, unicode or not, no syntax embedding
+    - match: ([uU]?R)(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.block.2hl
+        - match: "'''"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+    # Triple-quoted capital R raw string, bytes, no syntax embedding
+    - match: ([bB]R|R[bB])(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.block.2hl
+        - match: "'''"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+    # Triple-quoted raw string, unicode or not, will detect SQL, otherwise regex
+    - match: ([uU]?r)(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.block.2hl
+        - match: '(?={{sql_indicator}})'
+          set:
+            - meta_scope: meta.string.2hl string.quoted.single.block.2hl
+            - match: "'''"
+              scope: punctuation.definition.string.end.2hl
+              set: after-expression
+            - match: ''
+              push: scope:source.sql
+              with_prototype:
+                - match: (?=''')
+                  pop: true
+                - include: escaped-unicode-char
+                - include: escaped-char
+                - include: constant-placeholder
+        - match: '(?=\S)'
+          set:
+            - meta_scope: meta.string.2hl string.quoted.single.block.2hl
+            - match: "'''"
+              scope: punctuation.definition.string.end.2hl
+              set: after-expression
+            - match: ''
+              push: scope:source.regexp.2hl
+              with_prototype:
+                - match: (?=''')
+                  pop: true
+                - include: escaped-unicode-char
+    # Triple-quoted raw string, bytes, will use regex
+    - match: ([bB]r|r[bB])(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.block.2hl
+        - match: "'''"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - match: ''
+          embed: scope:source.regexp.2hl
+          escape: (?=''')
+    # Triple-quoted raw f-string
+    - match: ([fF]R|R[fF])(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.single.block.2hl
+        - match: "'''"
+          scope: punctuation.definition.string.begin.2hl
+          set: after-expression
+        - include: f-string-content
+    # Triple-quoted raw f-string, treated as regex
+    - match: ([fF]r|r[fF])(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.single.block.2hl
+        - match: "'''"
+          scope: punctuation.definition.string.begin.2hl
+          set: after-expression
+        - match: ''
+          push: scope:source.regexp.2hl
+          with_prototype:
+            - match: (?=''')
+              pop: true
+            - include: line-continuation-inside-string
+            - include: f-string-content-reset
+    # Triple-quoted f-string
+    - match: ([fF])(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.single.block.2hl
+        - match: "'''"
+          scope: punctuation.definition.string.begin.2hl
+          set: after-expression
+        - include: escaped-unicode-char
+        - include: escaped-char
+        - include: f-string-content
+    # Triple-quoted string, unicode or not, will detect SQL
+    - match: ([uU]?)(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.block.2hl
+        - match: '(?={{sql_indicator}})'
+          set:
+            - meta_scope: meta.string.2hl string.quoted.single.block.2hl
+            - match: "'''"
+              scope: punctuation.definition.string.end.2hl
+              set: after-expression
+            - match: ''
+              push: scope:source.sql
+              with_prototype:
+                - match: (?=''')
+                  pop: true
+                - include: escaped-unicode-char
+                - include: escaped-char
+                - include: constant-placeholder
+        - match: '(?=\S)'
+          set:
+            - meta_scope: meta.string.2hl string.quoted.single.block.2hl
+            - match: "'''"
+              scope: punctuation.definition.string.end.2hl
+              set: after-expression
+            - include: escaped-unicode-char
+            - include: escaped-char
+            - include: constant-placeholder
+    # Triple-quoted string, bytes, no syntax embedding
+    - match: ([bB])(''')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.block.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.block.2hl
+        - match: "'''"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-char
+        - include: constant-placeholder
+
+  string-quoted-single:
+    # Single-line capital R raw string, unicode or not, no syntax embedding
+    - match: '([uU]?R)('')'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+    # Single-line capital R raw string, bytes, no syntax embedding
+    - match: '([bB]R|R[bB])('')'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+    # Single-line raw string, unicode or not, starting with a SQL keyword
+    - match: '([uU]?r)('')(?={{sql_indicator}})'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.sql
+          with_prototype:
+            - match: '(?=''|\n)'
+              pop: true
+            - include: line-continuation-inside-string
+            - include: constant-placeholder
+    # Single-line raw string, unicode or not, treated as regex
+    - match: '([uU]?r)('')'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.regexp.2hl
+          with_prototype:
+            - match: '(?=''|\n)'
+              pop: true
+            - include: line-continuation-inside-string
+    # Single-line raw string, bytes, treated as regex
+    - match: '([bB]r|r[bB])('')'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.regexp.2hl
+          with_prototype:
+            - match: '(?=''|\n)'
+              pop: true
+            - include: line-continuation-inside-string
+    # Single-line raw f-string
+    - match: ([fF]R|R[fF])(')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - include: f-string-content
+    # Single-line raw f-string, treated as regex
+    - match: ([fF]r|r[fF])(')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.regexp.2hl
+          with_prototype:
+            - match: (?='|\n)
+              pop: true
+            - include: line-continuation-inside-string
+            - include: f-string-content-reset
+    # Single-line f-string
+    - match: ((?i)f|f)(')
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.interpolated.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.interpolated.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-unicode-char
+        - include: escaped-char
+        - include: line-continuation-inside-string
+        - include: f-string-content
+    # Single-line string, unicode or not, starting with a SQL keyword
+    - match: '([uU]?)('')(?={{sql_indicator}})'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: line-continuation-inside-string
+        - match: ''
+          push: scope:source.sql
+          with_prototype:
+            - match: '(?=''|\n)'
+              pop: true
+            - include: escaped-unicode-char
+            - include: escaped-char
+            - include: line-continuation-inside-string
+            - include: constant-placeholder
+    # Single-line string, unicode or not
+    - match: '([uU]?)('')'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-unicode-char
+        - include: escaped-char
+        - include: line-continuation-inside-string
+        - include: constant-placeholder
+    # Single-line string, bytes
+    - match: '([bB])('')'
+      captures:
+        1: storage.type.string.2hl
+        2: meta.string.2hl string.quoted.single.2hl punctuation.definition.string.begin.2hl
+      push:
+        - meta_content_scope: meta.string.2hl string.quoted.single.2hl
+        - match: "'"
+          scope: punctuation.definition.string.end.2hl
+          set: after-expression
+        - include: escaped-char
+        - include: line-continuation-inside-string
+        - include: constant-placeholder
+
+  strings:
+    # block versions must be matched first
+    - include: string-quoted-double-block
+    - include: string-quoted-double
+    - include: string-quoted-single-block
+    - include: string-quoted-single
+
+  inline-for:
+    - match: \b(?:(async)\s+)?(for)\b
+      captures:
+        1: storage.modifier.async.2hl
+        2: keyword.control.flow.for.generator.2hl
+      push:
+        - include: comments
+        - meta_scope: meta.expression.generator.2hl
+        - match: \b(in)\b
+          scope: keyword.control.flow.for.in.2hl
+          pop: true
+        - match: '(?=[)\]}])'
+          scope: invalid.illegal.missing-in.2hl
+          pop: true
+        - include: illegal-names-pop
+        - include: target-list
+
+  inline-if:
+    - match: \b(if)\b
+      scope: keyword.control.flow.if.inline.2hl
+    - match: \b(else)\b
+      scope: keyword.control.flow.else.inline.2hl
+
+  target-list:
+    - match: ','
+      scope: punctuation.separator.target-list.2hl
+      push: allow-unpack-operators
+    - match: \(
+      scope: punctuation.section.target-list.begin.2hl
+      push:
+        - include: comments
+        - match: ','
+          scope: punctuation.separator.target-list.2hl
+          push: allow-unpack-operators
+        - match: \)
+          scope: punctuation.section.target-list.end.2hl
+          pop: true
+        - include: target-list
+        - include: name
+    - include: name

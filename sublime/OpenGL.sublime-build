@@ -1,0 +1,14 @@
+{
+	"shell_cmd": "g++ \"${file}\" -o \"${file_path}/${file_base_name}\" -lglfw3 -lopengl32 -lglu32 -lgdi32 -I C:/Stuff/Code/OpenGL/Libraries/include -L C:/Stuff/Code/OpenGL/Libraries/lib",
+	"file_regex": "^(..[^:]*):([0-9]+):?([0-9]+)?:? (.*)$",
+	"working_dir": "${file_path}",
+	"selector": "source.c++",
+
+	"variants":
+	[
+		{
+			"name": "Run",
+			"shell_cmd": "g++ \"${file}\" -o \"${file_path}/${file_base_name}\" -lglfw3 -lopengl32 -lglu32 -lgdi32 -I C:/Stuff/Code/OpenGL/Libraries/include -L C:/Stuff/Code/OpenGL/Libraries/lib && \"${file_path}/${file_base_name}\""
+		}
+	]
+}

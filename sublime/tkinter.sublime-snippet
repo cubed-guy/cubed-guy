@@ -1,0 +1,12 @@
+<snippet>
+	<content><![CDATA[from tkinter.filedialog import asksaveasfilename as ${1:tksave}
+from tkinter.filedialog import askopenfilename as ${2:tkopen}
+from tkinter import Tk
+
+root = Tk()
+root.withdraw()
+${0}]]></content>
+<tabTrigger>!tk</tabTrigger>
+<scope>source.python - meta.function.parameters - meta.function-call - meta.statement - meta.mapping - meta.sequence - meta.set - comment - string</scope>
+<description>Tkinter Filedialogs</description>
+</snippet>

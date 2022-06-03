@@ -1,0 +1,153 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+file_extensions:
+  - ice
+scope: source.ice
+
+variables:
+  punctuation: '[\[\\\]()\.,:;]'
+  operator: '[-+*/%&|~^<=>]|!='
+  shape_prefix: ((?:\[\d+\]|[0-6*])*)(?:(\^)?([0-6])|(\(.*?\)(?=\w)))
+  keyword: |-
+    \b(?x:if|else|elif|for|while|
+    return|break|continue|pass|None)\b
+  builtins: '\b(print(?:num|ln)?|deref)\b'
+
+contexts:
+  prototype:
+    - include: comments
+
+  main:
+    - include: keywords
+    - include: functions
+    - include: strings
+    - include: labels
+    - include: identifiers
+    - include: numbers
+    - include: punctuation
+    - match: ({{operator}})
+      scope: keyword.operator.ice
+
+  punctuation:
+    - match: (\$)
+      scope: punctuation.definition.ownership.ice
+    - match: ({{punctuation}})
+      scope: punctuation.ice
+
+  identifiers:
+    - include: ownable_symbols
+    - match: (\$)?([a-zA-Z_]\w*|\s*$)
+      captures:
+        1: punctuation.definition.ownership.ice
+
+  unit:
+    - match: \d(?=[a-zA-Z_])
+      scope: storage.size.ice
+
+  ownable_symbols:
+    - match: (\$)?(?={{shape_prefix}}[a-zA-Z_])
+      scope: punctuation.definition.ownership.ice
+      push: shape
+
+  shape:
+    - match: \d+
+      scope: constant.numeric.shape.ice
+    - match: \*
+      scope: punctuation.pointer.ice
+    - match: \^
+      scope: punctuation.void-pointer.ice
+    - match: ([]\[])
+      scope: punctuation.shape.array.ice
+    - match: \(
+      scope: punctuation.definition.begin.struct.ice
+      push:
+        - include: shape
+        - match: \,
+          scope: punctuation.separator.shape.struct.ice
+        - match: \)
+          scope: punctuation.definition.end.struct.ice
+          pop: true
+
+    - match: (?=[a-zA-Z])
+      pop: true
+
+  labels:
+    - match: ^\s*(@)(?=({{shape_prefix}})?\w+[^:]*$)
+      scope: punctuation.label.ice
+      push:
+        - match: ({{shape_prefix}})
+          push: shape
+        - match: \w+
+          scope: entity.name.tag.ice
+        - match: \b
+          pop: true
+    - match: ^\s*(@)(?={{shape_prefix}}\w+.*:)
+      scope: punctuation.definition.label.ice
+      push:
+        - meta_content_scope: meta.definition.label.ice
+        - match: (?={{shape_prefix}})
+          push: shape
+        - match: \w+
+          scope: entity.name.label.ice entity.name.class.ice
+        - match: \b
+          pop: true
+
+  functions:
+    - match: ^\s*(?=\$?{{shape_prefix}}*\w+\s*\(.*\):)
+      scope: keyword.ice
+      push:
+        - include: ownable_symbols
+        - match: \w+
+          scope: entity.name.function.ice
+        - match: \(
+          scope: punctuation.ice
+          set: arguments
+
+  arguments:
+    - meta_content_scope: meta.arguments.ice
+    - include: ownable_symbols
+    - match: ({{keyword}})
+      scope: invalid.illegal.keyword.ice
+    - match: ([,)])
+      scope: punctuation.ice
+      pop: true
+
+  keywords:
+    - match: ({{keyword}})
+      scope: keyword.control.ice
+    - match: '\b(in|or|and|not)\b'
+      scope: keyword.operator.ice
+    - match: ({{builtins}})
+      scope: support.function.builtin.ice
+
+  numbers:
+    - match: '\b[0-9]+'
+      scope: constant.numeric.ice
+
+  strings:
+    # Strings begin and end with quotes, and use backslashes as an escape
+    # character.
+    - match: (['"])
+      scope: punctuation.definition.string.begin.ice
+      push:
+        - meta_include_prototype: false
+        - meta_scope: string.quoted.ice
+        - match: '\\x\h\h'
+          scope: constant.character.escape.hexadecimal.ice
+        - match: '\\.'
+          scope: constant.character.escape.ice
+        - match: \n
+          scope: invalid.illegal.string-eol
+          pop: true
+        - match: \1
+          scope: punctuation.definition.string.end.ice
+          pop: true
+
+  comments:
+    - match: '#'
+      scope: punctuation.definition.comment.pound-sign.ice
+      push:
+        - meta_scope: comment.line.double-slash.ice
+        - match: $\n?
+          pop: true

@@ -1,0 +1,80 @@
+{
+	"color_scheme": "Celeste Dark.sublime-color-scheme",
+	"file_exclude_patterns":
+	[
+		"*.pyc",
+		"*.pyo",
+		"*.exe",
+		"*.dll",
+		"*.obj",
+		"*.o",
+		"*.a",
+		"*.lib",
+		"*.so",
+		"*.dylib",
+		"*.ncb",
+		"*.sdf",
+		"*.suo",
+		"*.pdb",
+		"*.idb",
+		".DS_Store",
+		"*.class",
+		"*.psd",
+		"*.db",
+		"*.sublime-workspace",
+		"*.sublime-project"
+	],
+	"folder_exclude_patterns":
+	[
+		".svn",
+		".git",
+		".hg",
+		"CVS",
+		"__pycache__"
+	],
+	"font_size": 16,
+	"ignored_packages":
+	[
+	],
+	"theme": "Material-Theme-Darker.sublime-theme",
+	"caret_style": "smooth",
+	"auto_complete": true,
+	"auto_complete_triggers":
+	[
+		{
+			"characters": "({[.,'\"=<>/+-|&*%$@!; ",
+			"selector": "source.python & - comment",
+		},
+		{
+			"characters": "(){}[].,'\"=<>/\\+-|&*%$#@!: ",
+			"selector": "source & - source.python - constant.numeric - comment",
+		},
+		{
+			"characters": "qazwsxedcrfvtgbyhnujmikolpQAZWSXEDCRFVTGBYHNUJMIKOLP",
+			"selector": "text, source & - comment",
+		}
+	],
+	// "auto_complete_triggers":
+	// [
+	// 	{
+	// 		"characters": ".(){}[],'\"=<>/\\+-|&*%=$#@! ",
+	// 		"selector": "source.python",
+	// 	},
+	// 	{
+	// 		"characters": ":.(){}[],'\"=<>/\\+-|&*%=$#@! ",
+	// 		"selector": "source & - source.python - constant.numeric",
+	// 	},
+	// 	{
+	// 		"characters": " qazwsxedcrfvtgbyhnujmikolpQAZWSXEDCRFVTGBYHNUJMIKOLP",
+	// 		"selector": "text",
+	// 	}
+	// ],
+	"auto_complete_cycle": true,
+	"auto_complete_commit_on_tab": true,
+	"auto_complete_with_fields": true,
+	
+	"mini_auto_complete": true,
+	// "auto_complete_delay": 500,
+	// "font_face": "Cascadia Mono",
+	/*"auto_complete": true,*/
+}

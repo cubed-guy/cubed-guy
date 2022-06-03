@@ -1,0 +1,104 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+name: nestless
+file_extensions:
+  - nl
+scope: source.nl
+variables:
+  keywords: \b(?i:if|for|while)\b
+  articles: \b(?i:an?)\b
+  builtins: \b(?i:opens|print|is|return|write|reads|length)\b
+  prepositions: |-
+    (?xi)\b(?:aboard|about|above|across|after|against|along|alongside|amid
+      |amidst|among|amongst|anti|around|as|astride|at|atop|bar|barring|before
+      |behind|below|beneath|beside|besides|between|beyond|but|by|circa
+      |concerning|considering|counting|cum|despite|down|during|except|excepting
+      |excluding|following|for|from|given|gone|in|including|inside|into|less
+      |like|minus|near|notwithstanding|of|off|on|onto|opposite|outside|over|past
+      |pending|per|plus|pro|re|regarding|respecting|round|save|saving|since|than
+      |through|throughout|till|to|touching|towards|under|underneath|unlike|until
+      |up|upon|versus|via|with|within|without|worth)\b
+
+contexts:
+  # The prototype context is prepended to all contexts but those setting
+  # meta_include_prototype: false.
+  prototype:
+    - include: comments
+
+  main:
+    # The main context is the initial starting point of our syntax.
+    # Include other contexts from here (or specify them directly).
+    - include: headings
+    - include: keywords
+    - include: literals
+    - include: punctuation
+    - match: '[a-zA-Z]+'
+      scope: word.nl
+
+  headings:
+    - match: ^(#)(?!\s*[a-zA-Z]+)
+      scope: punctuation.definition.verb.nl
+    - match: ^(#)\s*({{articles}}\s+[a-zA-Z]+\s+)?([a-zA-Z]+)
+      captures:
+        1: punctuation.definition.verb.nl
+        2: storage.type.return.verb.nl
+        3: entity.name.verb.nl
+      push:
+        - include: punctuation
+        - match: '{{prepositions}}'
+          scope: keyword.operator.preposition.nl
+        - match: '{{articles}}\s+[a-zA-Z]*'
+          scope: storage.type.nl
+        - match: '{{keywords}}'
+          scope: invalid.illegal.nl
+        - match: $\n?
+          pop: true
+
+  literals:
+    - match: \b\d+
+      scope: constant.numeric.nl
+    - match: \b(?i:true|false)
+      scope: constant.language.nl
+    - match: (['"])
+      scope: punctuation.definition.string.begin.nl
+      push:
+        - meta_include_prototype: false
+        - meta_scope: string.quoted.double.nl
+        - match: \\[rtnvfab]
+          scope: constant.character.escape.nl
+        - match: \\[^rtnvfab]
+          scope: invalid.illegal.character.escape.nl
+        - match: \1
+          scope: punctuation.definition.string.end.nl
+          pop: true
+
+  keywords:
+    # Keywords are if, else for and while.
+    # Note that blackslashes don't need to be escaped within single quoted
+    # strings in YAML. When using single quoted strings, only single quotes
+    # need to be escaped: this is done by using two single quotes next to each
+    # other.
+    - match: '{{keywords}}'
+      scope: keyword.control.nl
+    - match: '{{articles}}\s+[a-zA-Z]*'
+      scope: storage.type.nl
+    - match: '{{prepositions}}'
+      scope: keyword.operator.preposition.nl
+    - match: '{{builtins}}'
+      scope: support.function.builtin.nl
+
+  punctuation:
+    - match: '[,\.]'
+      scope: punctuation.nl
+    - match: '[<>=*/%+-]'
+      scope: keyword.operator.nl
+
+  comments:
+    - match: '\('
+      scope: punctuation.definition.comment.nl
+      push:
+        - meta_scope: comment.parentheses.nl
+        - match: \)
+          scope: punctuation.definition.comment.nl
+          pop: true

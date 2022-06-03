@@ -1,0 +1,55 @@
+%YAML 1.2
+---
+file_extensions:
+  - pasm
+scope: source.pretty-assembly
+extends: Packages/User/Nasm x86.sublime-syntax
+
+contexts:
+  main:
+    - include: labels
+    - include: keywords
+    - include: comments
+    - include: macros
+
+    - match: '\b(if|elif|do while)\b'
+      scope: keyword.control.condition.pretty-assembly
+      push:
+        - match: '\b(n?([scopez]|[bagl]e?)|p[oe]|[er]?cxz)\b'
+          scope: keyword.operator.condition.pretty-assembly
+          pop: true
+        - match: \n
+          pop: true
+        - match: \S.*
+          scope: invalid.illegal.pretty-assembly
+          pop: true
+    - match: '\belse\b'
+      scope: keyword.control.else.pretty-assembly
+
+    - match: ([-+&^|]|<<|>>)?=
+      scope: keyword.operator.pretty-assembly
+
+    - include: nasm-main
+
+  nasm-main:
+    - match: (%)(\d+)
+      captures:
+        1: punctuation.definition.variable.nasm
+        2: constant.numeric.variable.macro.nasm
+    - match: (["'])(.*?)(\1)
+      captures:
+        1: punctuation.definition.string.begin.nasm
+        2: string.quoted.nasm
+        3: punctuation.definition.string.end.nasm
+    - match: (["'])(.*)(\n?)
+      captures:
+        1: punctuation.definition.string.begin.nasm
+        2: string.quoted.nasm
+        3: invalid.illegal.eof.nasm
+    - match: (`)
+      scope: punctuation.definition.string.begin.nasm
+      push: instring
+    - match: '\b(?:0[xh]\h+|0[by][01]+|\d+d?)\b'
+      scope: constant.numeric.nasm
+    - match: '[]\[(,)%/+*-]'
+      scope: punctuation.nasm

@@ -1,0 +1,19 @@
+%YAML 1.2
+---
+file_extensions:
+  - dat
+scope: text.dat
+
+variables:
+  min_length: '{4,}'
+
+contexts:
+  main:
+    - match: ([0-9\.]{{min_length}})
+      scope: constant.numeric.dat
+    - match: ([0-9a-zA-Z]{{min_length}})(?![\w\s!-~])
+      scope: source.dat
+    - match: ([\w\s!-~]{{min_length}})
+      scope: string.dat
+    - match: \x00
+      scope: entity.name.null.dat

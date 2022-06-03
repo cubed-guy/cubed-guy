@@ -1,0 +1,4 @@
+{
+	"cmd": ["python", "C:\\Stuff\\Allen\\Reactions\\extractor.pyw", "$file"],
+	"selector": "string.rxn"
+}

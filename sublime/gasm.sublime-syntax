@@ -1,0 +1,23 @@
+%YAML 1.2
+---
+# See http://www.sublimetext.com/docs/3/syntax.html
+name: Golfed Assembly
+file_extensions:
+  - gasm
+scope: source.gasm
+
+contexts:
+  main:
+    - match: ([a-zA-Z])
+      scope: meta.identifier.gasm
+    - match: ([{\[]([<>]=?)?|[]}])
+      scope: keyword.control.gasm
+    - match: (\d+)
+      scope: constant.numeric.gasm
+    - match: ([-+*/?,.;])
+      scope: keyword.operator.gasm
+    - match: (>)([a-zA-Z])
+      captures:
+        0: meta.preprocessor.gasm
+        1: punctuation.accessor.gasm
+        2: meta.identifier.gasm

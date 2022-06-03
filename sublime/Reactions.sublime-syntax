@@ -1,0 +1,19 @@
+%YAML 1.2
+---
+file_extensions:
+  - rxn
+scope: string.rxn
+
+contexts:
+  main:
+    - match: (^\d\d?\w{3})(.*)
+      captures:
+        1: entity.name.rxn
+        2: entity.name.tag.version.rxn
+    - match: ^((\d\dH:\d\dm:\d\ds ?){1,2})((\^)(.*))?
+      captures:
+        1: keyword.operator.timestamp.rxn
+        4: keyword.previous.rxn
+        5: text.rxn
+    - match: ^.*
+      scope: invalid.illegal.rxn

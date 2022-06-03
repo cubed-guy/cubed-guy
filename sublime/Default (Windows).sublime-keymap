@@ -1,0 +1,49 @@
+[
+	{ "keys": ["ctrl+shift+c"], "command": "show_scope_name" },
+	{ "keys": ["pause"], "command": "cancel_build" },
+
+	{
+		"keys": ["shift+tab"], "command": "move",
+		"args": {"by": "lines", "forward": true},
+		"context": [ { "key": "auto_complete_visible", "operand": true } ]
+	},
+	{
+		"keys": ["up"], "command": "hide_auto_complete",
+		"context": [ { "key": "auto_complete_visible", "operand": true } ]
+	},
+	{
+		"keys": ["down"], "command": "hide_auto_complete",
+		"context": [ { "key": "auto_complete_visible", "operand": true } ]
+	},
+	{
+		"keys": ["shift+escape"], "command": "hide_panel",
+		"args": {"panel": "output.exec"},
+		"context": [ { "key": "panel_visible", "operand": true } ]
+	},
+	{
+		"keys": ["shift+escape"], "command": "single_selection",
+		"context": [
+			{ "key": "num_selections", "operator": "not_equal", "operand": 1 },
+		]
+	},
+
+	{
+		"keys": ["ctrl+l"], "command": "single_selection",
+		"context": [
+			{ "key": "num_selections", "operator": "not_equal", "operand": 1 },
+		]
+	},
+	{ "keys": ["ctrl+l"], "command": "exit_insert_mode",
+		"context":
+		[
+			{ "key": "setting.command_mode", "operand": false },
+		]
+	},
+	{ "keys": ["ctrl+l"], "command": "exit_visual_mode",
+		"context":
+		[
+			{ "key": "setting.command_mode"},
+			{ "key": "selection_empty", "operator": "equal", "operand": false, "match_all": false }
+		]
+	}
+]

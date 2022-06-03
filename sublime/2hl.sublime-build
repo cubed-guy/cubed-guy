@@ -1,0 +1,16 @@
+{
+	"cmd": ["python", "C:\\Stuff\\Code\\Two Hour Language\\compiler.py", "$file"],
+	"file_regex": "File \"(...*?)\", line ([0-9]*)",
+	"selector": "source.2hl",
+	"working_dir": "C:\\Stuff\\Code\\Two Hour Language",
+	"variants": [
+		{
+			"name": "Build and Run",
+			"shell_cmd": "python compiler.py \"${file}\" && nasm \"${file_path}\\\\${file_base_name}.asm\" -f win64 -o \"${file_path}\\\\${file_base_name}.o\" && gcc \"${file_path}\\\\${file_base_name}.o\" -no-pie -o \"${file_path}\\\\${file_base_name}.exe\" && \"${file_path}\\\\${file_base_name}\""
+		},
+		{
+			"name": "Run",
+			"shell_cmd": "\"${file_path}\\\\${file_base_name}\""
+		},
+	]
+}
