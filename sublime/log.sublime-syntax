@@ -1,0 +1,70 @@
+%YAML 1.2
+---
+name: Generic Log
+
+# See http://www.sublimetext.com/docs/3/syntax.html
+file_extensions:
+  - log
+scope: text.log
+
+contexts:
+  # The prototype context is prepended to all contexts but those setting
+  # meta_include_prototype: false.
+  main:
+    # The main context is the initial starting point of our syntax.
+    # Include other contexts from here (or specify them directly).
+    - include: words
+    - include: strings
+    - include: punctuation
+
+  words:
+    - match: '(\.)?\b(0x[0-9a-fA-F]+)\b'
+      captures:
+        1: punctuation.fractional.log
+        2: constant.numeric.log
+
+    - match: '(\.)?\b([a-fA-F_]*\d[a-fA-F0-9_]*)\b'
+      captures:
+        1: punctuation.fractional.log
+        2: constant.numeric.log
+
+    - match: '\b([A-Z_][_A-Z0-9]+)\b'
+      scope: keyword.variable.log
+
+    - match: '\b(([A-Za-z][A-Za-z0-9]*?[_A-Z]|_)\w*)\b'
+      scope: source.log
+
+    - match: '(\.)?\b([0-9]+)([a-zA-Z][a-zA-Z]*)?\b'
+      captures:
+        1: punctuation.fractional.log
+        2: constant.numeric.log
+        3: constant.language.unit.log
+
+    - match: '(\.)(\w+)\b'
+      captures:
+        1: punctuation.accessor.log
+        2: source.log
+
+    - match: '\b(\w+)(?=\.\S)'
+      scope: source.log
+
+  strings:
+    # Strings begin and end with quotes, and use backslashes as an escape
+    # character.
+    - match: (["'])(?=([^\\\n]*?)(\1))
+      scope: punctuation.definition.string.begin.log
+      push:
+        - meta_content_scope: string.log
+        - match: (\1)
+          scope: punctuation.definition.string.end.log
+          pop: true
+        - include: words
+
+    - match: '["'']'
+      scope: punctuation.definition.string.log
+
+  punctuation:
+    # Strings begin and end with quotes, and use backslashes as an escape
+    # character.
+    - match: '[]\[:;,.<>!=!@#$%^&*(){}|\\/?~`+-]*'
+      scope: punctuation.log
