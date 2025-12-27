@@ -9,15 +9,17 @@
 # DONE: Rename
 # DONE: Delete
 # DONE: Switch lanes
-# TODO: Shove (and thus bulk edit, toggleable)
-# TODO: Lock events
+# DONE: Shove (and thus bulk edit, toggleable)
+# DONE: Lock events
 # DONE: Pan and zoom
 # DONE: Time Markers
 # DONE: Type pos and len
-# TODO: Constraints while typing
+# DONE: Constraints on typed times
+# DONE: Unlink
 # TODO: Save and load
-# TODO: Ghost lane
+# TODO: Undo
 # TODO: Binary Search
+# TODO: Ghost lane
 
 import pygame
 from datetime import datetime as dt, timedelta as td
@@ -31,9 +33,11 @@ COL_BG   = c-0x22
 COL_REG  = c-0x80
 COL_SEL  = c@0xff6040
 COL_SEL_DEP = c@0xc0a030
+COL_SEL_SHOVE = c@0xa030c0
 COL_HVR  = c--1
 COL_LANE = c-0x32
 COL_DEP  = c-0x50
+COL_LOCKED = c-0x50
 COL_MARKER = c-0x50
 COL_TIMETEXT = c-0x80
 COL_NAME = c@0xffffa0
@@ -75,13 +79,14 @@ class Event:
 		self.dur = dur
 		self.lane = lane
 		self.deps = []  # These must complete only before self
+		self.locked = False
 
 		# Storing just deps is sufficient to deduce the depees,
 		# but we make a space-time tradeoff by storing the depees explicitly
 		self.depees = []  # These must begin only after self
 
 	def __repr__(self):
-		return f'Event{self.name!r}< {self.start} |{self.dur}| >'
+		return f'{self.name!r}[{self.lane}]<{self.start:%H:%M:%S}-{self.start+self.dur:%H:%M:%S}>'
 
 	def add_dep(self, dep):
 		# TODO: Get a hash or something
@@ -90,6 +95,14 @@ class Event:
 		self.deps.append(dep)
 		dep.depees.append(self)
 		print('Created dependency:', dep, 'to', self)
+
+	def remove_dep(self, dep):
+		# TODO: Get a hash or something
+		if dep not in self.deps: return
+
+		self.deps.remove(dep)
+		dep.depees.remove(self)
+		print('Removed dependency:', dep, 'to', self)
 
 	def tightest_dep(self):
 		out = None
@@ -105,6 +118,105 @@ class Event:
 		# print('tightest depee out of', len(self.depees), '->', out)
 		return out
 
+	def submit_end(self, end, *, shove):
+		'''
+		Changes dur based on new end time
+		'''
+		if shove:
+			if self.locked: return  # Locked means locked.
+			if shove_lims[1] is not None: end = min(end, shove_lims[1])
+			while 1:
+				depee = self.tightest_depee()
+				if depee is None: break
+				if depee.start >= end: break  # Nothing left to shove
+				depee.submit_pos(end, shove=True)
+
+			next_event = None
+			for event in lanes[self.lane]:
+				if self.start < event.start < end:
+					# We'll submit only for the closest one so that any others will get rippled
+					if next_event is not None and event.start <= next_event.start: continue
+					next_event = event
+
+			if next_event is not None:
+				next_event.submit_pos(end, shove=True)
+
+		else:
+			lim = next_collision(self.start, lanes[self.lane])
+			depee = self.tightest_depee()
+			if depee is not None and (lim is None or depee.start < lim): lim = depee.start
+			if lim is not None and lim < end: end = lim
+
+		print(f'Setting dur to: max({end-self.start}, td(0))')
+		self.dur = max(end-self.start, td(0))
+
+	def submit_pos(self, pos, *, shove, limited = True):
+		'''
+		Changes pos keeping dur constant
+		'''
+		if shove:
+			if self.start < pos:
+				if limited and shove_lims[1] is not None: pos = min(pos, shove_lims[1]-self.dur)
+				end = pos+self.dur
+				while 1:
+					depee = self.tightest_depee()
+					if depee is None: break
+					if depee.start >= end: break  # Nothing left to shove
+					print('tightest depee:', depee)
+					depee.submit_pos(end, shove=True, limited=False)
+
+
+				next_event = None
+				for event in lanes[self.lane]:
+					if self.start < event.start < end:
+						# We'll submit only for the closest one so that any others will get rippled
+						if next_event is not None and event.start <= next_event.start: continue
+						next_event = event
+
+				print(f'event after  {self} found to be: {next_event}')
+
+				if next_event is not None:
+					print(f'Submitting pos to {next_event}: {end}')
+					next_event.submit_pos(end, shove=True, limited=False)
+
+			else:
+				if limited and shove_lims[0] is not None: pos = max(pos, shove_lims[0])
+				while 1:
+					dep = self.tightest_dep()
+					if dep is None: break
+					if dep.start+dep.dur <= pos: break  # Nothing left to shove
+					print('tightest dep:', dep)
+					dep.submit_pos(pos-dep.dur, shove=True, limited=False)
+
+				prev_event = None
+				for event in lanes[self.lane]:
+					if pos < event.start+event.dur <= self.start:  # Assume no overlap. Less computation
+						# We'll submit only for the closest one so that any others will get rippled
+						if prev_event is not None and event.start >= prev_event.start: continue  # Assume no overlap. Less computation
+						prev_event = event
+
+				print(f'event before {self} found to be: {prev_event}')
+
+				if prev_event is not None:
+					print(f'Submitting pos to {prev_event}: {pos-prev_event.dur}')
+					prev_event.submit_pos(pos-prev_event.dur, shove=True, limited=False)
+
+		else:
+			lim = next_collision(selected.start, lanes[selected.lane])
+			depee = selected.tightest_depee()
+			if depee is not None and (lim is None or depee.start < lim): lim = depee.start
+			if lim is not None and lim-selected.dur < pos:
+				pos = lim-selected.dur
+			else:
+				lim = prev_collision(selected.start+selected.dur, lanes[selected.lane])
+				dep = selected.tightest_dep()
+				if dep is not None and (lim is None or dep.start+dep.dur > lim): lim = dep.start+dep.dur
+				if lim is not None and lim > pos:
+					# print('readjust from', pos, 'to', lim)
+					pos = lim
+
+		self.start = pos
+		print(f'Position set for {self}: {self.start}')
 
 lanes = []  # This is where we'll populate events
 
@@ -161,7 +273,10 @@ def update_display():
 
 			if mode in (Modes.pre_len, Modes.len) and event is hovered:
 				if event is selected:
-					event_col = COL_SEL
+					if shove:
+						event_col = COL_SEL_SHOVE
+					else:
+						event_col = COL_SEL
 				else:
 					event_col = COL_REG
 				display.fill(event_col, (x_start, y, event_w, 1))
@@ -173,10 +288,14 @@ def update_display():
 						event_col = COL_SEL_DEP
 					elif mode is Modes.text:
 						event_col = COL_NAME
+					elif shove:
+						event_col = COL_SEL_SHOVE
 					else:
 						event_col = COL_SEL
 				elif event is hovered:
 					event_col = COL_HVR
+				elif event.locked:
+					event_col = COL_LOCKED
 				else:
 					event_col = COL_REG
 				display.fill(event_col, (x_start, y, event_w, 1))
@@ -296,6 +415,60 @@ def fits_in_lane(lane, e):
 
 	return True
 
+def compute_shove_lims(e):
+	'''
+	Return the latest possible end value and the earliest possible start value
+	'''
+	forward_lim = forward_shove_lim(e)
+	if forward_lim is not None: forward_lim += e.dur
+	return backward_shove_lim(e), forward_lim
+
+def forward_shove_lim(e):
+	'''
+	Return the furthest in the future that e can be moved without pushing locked events
+	Performs a depth-first search. It will retrace paths already taken.
+	'''
+	if e.locked: return e.start
+
+	lim_end = None
+	for depee in e.depees:
+		dlim = forward_shove_lim(depee)
+		if dlim is None: continue
+		if lim_end is None or dlim < lim_end: lim_end = dlim
+
+	for other in lanes[e.lane]:
+		if other.start <= e.start: continue
+		olim = forward_shove_lim(other)
+		if olim is None: continue
+		if lim_end is None or olim < lim_end: lim_end = olim
+
+	# can a dt object have a truth value of false? 1970-01-01?
+	return lim_end and lim_end-e.dur
+
+def backward_shove_lim(e):
+	'''
+	Return the furthest in the past that e can be moved without pushing locked events
+	Returns None if e can be moved infinitely into the past
+	Performs a depth-first search. It will retrace paths already taken.
+	'''
+	if e.locked: return e.start
+
+	lim = None
+	for dep in e.deps:
+		dlim = backward_shove_lim(dep)
+		if dlim is None: continue
+		dlim += dep.dur
+		if lim is None or dlim > lim: lim = dlim
+
+	for other in lanes[e.lane]:
+		if other.start >= e.start: continue
+		olim = backward_shove_lim(other)
+		if olim is None: continue
+		olim += other.dur
+		if lim is None or olim > lim: lim = olim
+
+	return lim
+
 def unparse_td(dur):
 	dur -= dur%td(seconds=1)
 	out = f'{dur}s'
@@ -341,10 +514,10 @@ def parse_dt(text):
 	if text == 'n': return dt.now()
 
 	day, _, time = text.rpartition(' ')
-	if not day:
-		day = dt.now().replace(hour=0, minute=0, second=0)
-	elif day == 'n':
+	if day == 'n':
 		day = dt.now()
+	else:
+		day = dt.now().replace(hour=0, minute=0, second=0)
 
 	dur = parse_td(text)
 	return day + dur
@@ -354,6 +527,8 @@ view_start = dt.now().replace(hour=0, minute=0, second=0)
 mode = Modes.std
 text_target = TextFields.name
 
+shove = False
+shove_lims = None  # Optional<(dt, dt)>
 hovered = None
 selected = None
 grab_offset = None
@@ -375,9 +550,17 @@ while running:
 
 				elif event.key == K_RETURN:
 					if text_target is TextFields.len:
-						selected.dur = parse_td(text)
+						target_dur = parse_td(text)
+						shove_lims = compute_shove_lims(selected)
+						selected.submit_end(selected.start+target_dur, shove=shove)
+						if target_dur != selected.dur:
+							alert(f'Limited len to {unparse_td(selected.dur)} due to collisions')
 					elif text_target is TextFields.pos:
-						selected.start = parse_dt(text)
+						target_pos = parse_dt(text)
+						shove_lims = compute_shove_lims(selected)
+						selected.submit_pos(target_pos, shove=shove)
+						if target_pos != selected.start:
+							alert(f'Limited position to {unparse_dt(selected.start)} due to collisions')
 					elif text_target is TextFields.name:
 						selected.name = text
 					else:
@@ -441,6 +624,7 @@ while running:
 					soft_remove(current_lane, selected)
 					selected.lane -= 1
 					add_to_lane(target_lane, selected)
+					shove_lims = compute_shove_lims(selected)
 
 				elif event.key == K_s:  # s from wasd
 					if selected.lane+1 >= len(lanes):
@@ -456,9 +640,21 @@ while running:
 					soft_remove(current_lane, selected)
 					selected.lane += 1
 					add_to_lane(target_lane, selected)
+					shove_lims = compute_shove_lims(selected)
 
 				elif event.key == K_t:  # t for time
 					highlight_cursor = True
+
+				elif event.key == K_c:  # c for collide
+					shove = not shove
+
+				elif event.key == K_l:  # l for lock
+					if selected is None: continue
+					selected.locked = not selected.locked
+
+				elif event.key == K_q:  # q for query
+					if selected is None: continue
+					print(lanes[selected.lane])
 
 		elif event.type == KEYUP:
 			if event.key == K_t:
@@ -488,6 +684,7 @@ while running:
 					selected = Event(f'{dt.now().timestamp():.02f}', t, td(0), l)
 					add_to_lane(lane, selected)
 					mode = Modes.len
+					shove_lims = compute_shove_lims(selected)
 
 				elif mods & (KMOD_LALT|KMOD_RALT):  # Alt for scroll and zoom
 					mode = Modes.pan
@@ -501,7 +698,11 @@ while running:
 							if hovered.start+hovered.dur > selected.start:
 								alert('Dependency cannot end after the event has started')
 								continue
-							selected.add_dep(hovered)
+							mods = pygame.key.get_mods()
+							if mods & (KMOD_LSHIFT|KMOD_RSHIFT):
+								selected.remove_dep(hovered)
+							else:
+								selected.add_dep(hovered)
 
 						else:
 							selected = hovered
@@ -514,6 +715,8 @@ while running:
 								t, grab_start_lane = event_space(*event.pos)
 								grab_offset = t-selected.start
 
+							shove_lims = compute_shove_lims(selected)
+
 		elif event.type == MOUSEMOTION:
 			if mode is Modes.len:
 				if selected is None:
@@ -522,12 +725,7 @@ while running:
 					continue
 
 				t, l = event_space(*event.pos)
-				lim = next_collision(selected.start, lanes[selected.lane])
-				depee = selected.tightest_depee()
-				if depee is not None and (lim is None or depee.start < lim): lim = depee.start
-				if lim is not None and lim < t: t = lim
-				print(f'Setting dur to: max({t-selected.start}, td(0))')
-				selected.dur = max(t-selected.start, td(0))
+				selected.submit_end(max(t, selected.start), shove=shove)
 
 			elif mode is Modes.pos:
 				if selected is None:
@@ -537,20 +735,7 @@ while running:
 
 				t, l = event_space(*event.pos)
 				new_start = t-grab_offset
-				lim = next_collision(selected.start, lanes[selected.lane])
-				depee = selected.tightest_depee()
-				if depee is not None and (lim is None or depee.start < lim): lim = depee.start
-				if lim is not None and lim-selected.dur < new_start:
-					new_start = lim-selected.dur
-				else:
-					lim = prev_collision(selected.start+selected.dur, lanes[selected.lane])
-					dep = selected.tightest_dep()
-					if dep is not None and (lim is None or dep.start+dep.dur > lim): lim = dep.start+dep.dur
-					if lim is not None and lim > new_start:
-						# print('readjust from', new_start, 'to', lim)
-						new_start = lim
-
-				selected.start = new_start
+				selected.submit_pos(new_start, shove=shove)
 
 			elif mode is Modes.pan:
 				x, y = event.pos
@@ -574,6 +759,7 @@ while running:
 			if mode is not Modes.dep:
 				print('Reset Mode')
 				mode = Modes.std
+				shove_lims = None  # Useful to find errors. Crash instead of use wrong lims.
 
 	update_display()
 	clock.tick(fps)
